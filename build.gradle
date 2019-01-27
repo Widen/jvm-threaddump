@@ -1,0 +1,24 @@
+allprojects {
+    apply plugin: 'java'
+    apply plugin: 'idea'
+
+    repositories {
+        maven {
+            credentials {
+                username USER
+                password PASSWORD
+            }
+            url 'https://widen.jfrog.io/widen/repo/'
+        }
+    }
+
+    sourceCompatibility = 1.8
+    targetCompatibility = 1.8
+
+    tasks.idea {
+        dependsOn = [ cleanIdeaModule, ideaModule ]
+    }
+}
+
+group = 'widen'
+version = '2.0.0'

@@ -1,0 +1,4 @@
+include 'generator'
+include 'servlet'
+
+rootProject.name = 'jvm-threaddump'

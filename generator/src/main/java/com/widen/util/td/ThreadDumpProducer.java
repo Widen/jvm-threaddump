@@ -10,14 +10,9 @@ import java.util.TreeMap;
 public class ThreadDumpProducer {
 
     private final static ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
-
     private final static boolean cpuTimeEnabled = threadBean.isThreadCpuTimeSupported() && threadBean.isThreadCpuTimeEnabled();
 
-    long[] getDeadlocks() {
-        return threadBean.findMonitorDeadlockedThreads();
-    }
-
-    Map<Thread, StackTraceElement[]> getThreads() {
+    static Map<Thread, StackTraceElement[]> getThreads() {
         Map<Thread, StackTraceElement[]> dump = new TreeMap<>(
                 (Comparator<Object>) (lhs, rhs) -> {
                     Thread t1 = (Thread) lhs;
@@ -47,42 +42,28 @@ public class ThreadDumpProducer {
         long lockOwnerId = info == null ? -1 : info.getLockOwnerId();
         String lockName = info == null ? "" : info.getLockName();
 
-        String threadToString = thread.toString();
-
-        StringBuilder sb = new StringBuilder("\"" + name + "\"");
-
-        if (daemon) {
-            sb.append(" daemon");
-        }
-        sb.append(" priority=" + priority);
-        sb.append(" id=0x" + Long.toHexString(threadId));
-        sb.append(" group=" + threadGroupName);
-
-        if (cpuTimeNanos != -1) {
-            sb.append(" cpu=" + getThreadCpuTimeString(cpuTimeNanos));
-        }
-
-        sb.append(" block_cnt=" + blockedCount);
-        sb.append(" wait_cnt=" + waitedCount);
-        sb.append(" " + state);
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("\"%s\"%s priority=%s id=0x%s group=%s cpu=%s block_cnt=%s wait_cnt=%s %s",
+                name, daemon ? " daemon" : "", priority, Long.toHexString(threadId), threadGroupName,
+                getThreadCpuTimeString(cpuTimeNanos), blockedCount, waitedCount, state));
 
         if (lockOwnerId != -1) {
-            sb.append(" (waiting on 0x" + Long.toHexString(lockOwnerId));
-            if (lockName != null) {
-                sb.append(" for " + lockName);
-            }
-            sb.append(")");
+            sb.append(String.format(" (waiting on 0x%s%s) ", Long.toHexString(lockOwnerId), lockName == null ? "" : " for " + lockName));
         }
 
         // threadToString - skip if standard Thread.toString() or same as thread name
+        String threadToString = thread.toString();
         if (threadToString != null && !threadToString.startsWith("Thread[") && !threadToString.equalsIgnoreCase(name)) {
-            sb.append(" (" + threadToString + ")");
+            sb.append(String.format(" (%s)", threadToString));
         }
 
-        return sb.toString();
+        return sb.toString().trim();
     }
 
     private static String getThreadCpuTimeString(long cpuTimeNanos) {
+        if (cpuTimeNanos == -1) {
+            return "-1";
+        }
         long cpuTimeMs = cpuTimeNanos / 1000000;
         if (cpuTimeMs < 10000) {
             return cpuTimeMs + "ms";
@@ -95,7 +76,7 @@ public class ThreadDumpProducer {
     static String formatFrame(StackTraceElement frame) {
         String className = frame.getClassName();
         String methodName = frame.getMethodName();
-        String fileName = frame.getFileName();        // null if unavailable
+        String fileName = frame.getFileName();     // null if unavailable
         int lineNumber = frame.getLineNumber();    // negative if unavailable
         boolean isNative = frame.isNativeMethod();
 
@@ -114,7 +95,7 @@ public class ThreadDumpProducer {
             }
         }
 
-        return "      " + sb.toString();
+        return "    " + sb.toString();
     }
 
 }

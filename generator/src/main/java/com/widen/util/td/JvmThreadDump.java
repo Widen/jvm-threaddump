@@ -218,9 +218,9 @@ public class JvmThreadDump
         lines.add(new Line.TitledLine("Thread Count", String.valueOf(threads.size())));
         lines.add(new Line.BlankLine());
         for (Map.Entry<Thread, StackTraceElement[]> entry : threads.entrySet()) {
-            lines.add(new TitledLine("", ThreadDumpProducer.formatThread(entry.getKey())));
+            lines.add(new Line.SimpleLine(ThreadDumpProducer.formatThread(entry.getKey())));
             for (StackTraceElement frame : entry.getValue()) {
-                lines.add(new TitledLine("", ThreadDumpProducer.formatFrame(frame)));
+                lines.add(new Line.SimpleLine(ThreadDumpProducer.formatFrame(frame)));
             }
             lines.add(new BlankLine());
         }

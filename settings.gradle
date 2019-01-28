@@ -2,3 +2,6 @@ include 'generator'
 include 'servlet'
 
 rootProject.name = 'jvm-threaddump'
+
+project(':generator').name = 'jvm-threaddump-generator'
+project(':servlet').name = 'jvm-threaddump-servlet'

@@ -194,14 +194,14 @@ public class JvmThreadDump
         lines.add(new Line.BlankLine());
     }
 
-    public void doGc() {
+    private void doGc() {
         for (GarbageCollectorMXBean gc : gcBeans) {
             lines.add(new TitledLine("GC " + gc.getName(), String.format("spent %s doing %d collections", formatDuration(gc.getCollectionTime(), "H:mm:ss", true), gc.getCollectionCount())));
         }
         lines.add(new Line.BlankLine());
     }
 
-    public void doDeadlocks() {
+    private void doDeadlocks() {
         long[] deadlockedThreads = threadBean.findDeadlockedThreads();
         if (deadlockedThreads != null) {
             List<String> ids = Arrays.stream(deadlockedThreads).mapToObj(l -> "0x" + Long.toHexString(l)).collect(Collectors.toList());

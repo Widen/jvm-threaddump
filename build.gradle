@@ -1,14 +1,43 @@
-allprojects {
+plugins {
+    id 'nebula.release' version '6.3.5'
+    id 'nebula.maven-publish' version '7.2.4'
+}
+
+subprojects {
     apply plugin: 'java'
     apply plugin: 'idea'
+    apply plugin: 'nebula.release'
+    apply plugin: 'maven-publish'
+    apply plugin: 'nebula.source-jar'
+
+    group = 'widen'
 
     repositories {
         maven {
-            credentials {
-                username USER
-                password PASSWORD
-            }
             url 'https://widen.jfrog.io/widen/repo/'
+            credentials {
+                username System.env.JFROG_USER ?: USER
+                password System.env.JFROG_PASS ?: PASSWORD
+            }
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+    }
+
+    publishing {
+        repositories {
+            maven {
+                def repo = project.version.toString().findAll(/dev\.\d+(\.uncommitted)?\+/).isEmpty() ? 'libs-releases-local' : 'libs-snapshots-local'
+                url "https://widen.jfrog.io/widen/${repo}"
+                credentials {
+                    username System.env.JFROG_USER ?: USER
+                    password System.env.JFROG_PASS ?: PASSWORD
+                }
+                authentication {
+                    basic(BasicAuthentication)
+                }
+            }
         }
     }
 
@@ -23,6 +52,3 @@ allprojects {
         dependsOn = [ cleanIdeaModule, ideaModule ]
     }
 }
-
-group = 'widen'
-version = '2.0.0'

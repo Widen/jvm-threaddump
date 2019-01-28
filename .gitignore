@@ -1,5 +1,6 @@
 .DS_Store
 *.iml
+build
 /.idea/misc.xml
 /.idea/workspace.xml
 /.gradle

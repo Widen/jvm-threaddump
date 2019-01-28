@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface Line
 {
-    int PADDING = 25;
+    int PADDING = 22;
 
     String toString();
 

@@ -66,7 +66,7 @@ public class JvmThreadDump
 
     private void doJvmInfo() {
         lines.add(new TitledLine("Current Time", new SimpleDateFormat("MM/dd/yyyy HH:mm:ss z").format(new Date())));
-        lines.add(new TitledLine("Time Zone", TimeZone.getDefault().getDisplayName() + " (" + TimeZone.getDefault().getID() + ")"));
+        lines.add(new TitledLine("Default Time Zone", TimeZone.getDefault().getDisplayName() + " (" + TimeZone.getDefault().getID() + ")"));
         lines.add(new TitledLine("Java Version", format("%s (%s)", getProperty("java.runtime.version"), getProperty("java.vendor"))));
         lines.add(new TitledLine("Java VM", format("%s (%s)", getProperty("java.vm.version"), getProperty("java.vm.info"))));
         lines.add(new TitledLine("Java Home", getProperty("java.home")));
@@ -146,7 +146,7 @@ public class JvmThreadDump
     }
 
     private void doJvmMemory() {
-        lines.add(new TitledLine("JVM Free Memory", byteCountToDisplaySize(Runtime.getRuntime().freeMemory())));
+        lines.add(new TitledLine("JVM Free Memory", String.format("%s (of committed)", byteCountToDisplaySize(Runtime.getRuntime().freeMemory()))));
         lines.add(new TitledLine("JVM Maximum Heap", Runtime.getRuntime().maxMemory() == Long.MAX_VALUE ? "unlimited" : byteCountToDisplaySize(Runtime.getRuntime().maxMemory())));
 
         Set<String> memoryArgs = runtimeBean.getInputArguments().stream()

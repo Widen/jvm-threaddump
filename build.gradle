@@ -15,6 +15,10 @@ allprojects {
     sourceCompatibility = 1.8
     targetCompatibility = 1.8
 
+    dependencies {
+        testCompile group: 'junit', name: 'junit', version: '4.12'
+    }
+
     tasks.idea {
         dependsOn = [ cleanIdeaModule, ideaModule ]
     }

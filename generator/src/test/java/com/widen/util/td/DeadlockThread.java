@@ -34,14 +34,14 @@ public class DeadlockThread extends Thread
 		synchronized (lock1)
 		{
 			System.out.println("DeadlockThread [" + name + "] obtained lock on " + lock1);
-			try
-			{
-				Thread.sleep(500);
-			}
-			catch (InterruptedException e)
-			{
-				return;
-			}
+//			try
+//			{
+//				Thread.sleep(500);
+//			}
+//			catch (InterruptedException e)
+//			{
+//				return;
+//			}
 			synchronized (lock2)
 			{
 				System.out.println("DeadlockThread [" + name + "] obtained lock on " + lock2);

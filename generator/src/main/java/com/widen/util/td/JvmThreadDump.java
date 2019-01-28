@@ -54,7 +54,7 @@ public class JvmThreadDump
         doJvmInfo();
         doJvmMemory();
         doGc();
-        doDeadlockedThreads();
+        doDeadlocks();
         doThreads();
 
         StringBuilder sb = new StringBuilder(10_000);
@@ -62,69 +62,6 @@ public class JvmThreadDump
             sb.append(line.toString());
         }
         return sb.toString();
-    }
-
-    private void doThreads() {
-        ThreadDumpProducer producer = new ThreadDumpProducer();
-        Map<Thread, StackTraceElement[]> threads = producer.getThreads();
-        lines.add(new Line.TitledLine("Thread Count", String.valueOf(threads.size())));
-        lines.add(new Line.BlankLine());
-        for (Map.Entry<Thread, StackTraceElement[]> entry : threads.entrySet()) {
-            lines.add(new TitledLine("", ThreadDumpProducer.formatThread(entry.getKey())));
-            for (StackTraceElement frame : entry.getValue()) {
-                lines.add(new TitledLine("", ThreadDumpProducer.formatFrame(frame)));
-            }
-            lines.add(new BlankLine());
-        }
-    }
-
-    private void doJvmMemory() {
-        lines.add(new TitledLine("JVM Free Memory", byteCountToDisplaySize(Runtime.getRuntime().freeMemory())));
-        lines.add(new TitledLine("JVM Maximum Heap", Runtime.getRuntime().maxMemory() == Long.MAX_VALUE ? "unlimited" : byteCountToDisplaySize(Runtime.getRuntime().maxMemory())));
-
-        Set<String> memoryArgs = runtimeBean.getInputArguments().stream()
-                .filter(s -> s.startsWith("-X"))
-                .collect(Collectors.toCollection(TreeSet::new));
-        lines.add(new TitledLine("JVM Memory Args", String.join(" ", memoryArgs)));
-        lines.add(new BlankLine());
-
-        lines.add(new TitledLine("Memory", "used/max"));
-        lines.add(new TitledLine("Heap", formatMemoryUsage(memoryBean.getHeapMemoryUsage())));
-        lines.add(new TitledLine("Non Heap", formatMemoryUsage(memoryBean.getNonHeapMemoryUsage())));
-        lines.add(new BlankLine());
-
-        // "PS Eden Space", "PS Survivor Space", "PS Old Gen" == -XX:+UseParallelGC, Sun Parallel GC
-        // "CMS Old Gen", "CMS Perm Gen" == -XX:+UseConcMarkSweepGC, Sun Concurrent Mark Sweep GC
-        // "Par Eden Space", "Par Survivor Space" == -XX:+UseParNewGC, Parallel GC for young (OK to use with CMS GC)
-        // "G1 Eden", "G1 Survivor", "G1 Old Gen", "G1 Perm Gen" == -X G1
-
-        lines.add(new TitledLine("Collector", "used/max"));
-
-        String[] poolPrintOrder = new String[] { "PS Eden Space", "Par Eden Space", "Par Survivor Space",
-                "PS Survivor Space", "PS Old Gen", "CMS Old Gen", "PS Perm Gen",
-                "CMS Perm Gen", "G1 Eden", "G1 Survivor", "G1 Old Gen", "G1 Perm Gen",
-                "Code Cache", "Compressed Class Space", "Metaspace" };
-
-        List<String> printedPools = new ArrayList<>();
-        Map<String, MemoryUsage> pools = new HashMap<>();
-        for (MemoryPoolMXBean memoryPool : memoryPoolBeans) {
-            pools.put(memoryPool.getName(), memoryPool.getUsage());
-        }
-        for (String poolKey : poolPrintOrder) {
-            MemoryUsage usage = pools.get(poolKey);
-            if (usage != null) {
-                printedPools.add(poolKey);
-                lines.add(new TitledLine(poolKey, formatMemoryUsage(usage)));
-            }
-        }
-
-        for (String pool : pools.keySet()) {
-            if (!printedPools.contains(pool)) {
-                lines.add(new TitledLine(pool + "*", formatMemoryUsage(pools.get(pool))));
-            }
-        }
-
-        lines.add(new Line.BlankLine());
     }
 
     private void doJvmInfo() {
@@ -183,13 +120,15 @@ public class JvmThreadDump
 
     private class Uptime
     {
-        long uptime;
-        long idletime;
 
+        long uptime;
+
+        long idletime;
         public Uptime(long uptime, long idletime) {
             this.uptime = uptime;
             this.idletime = idletime;
         }
+
     }
 
     private String formatMemoryUsage(MemoryUsage usage) {
@@ -206,6 +145,55 @@ public class JvmThreadDump
                 byteCountToDisplaySize(usage.getMax()));
     }
 
+    private void doJvmMemory() {
+        lines.add(new TitledLine("JVM Free Memory", byteCountToDisplaySize(Runtime.getRuntime().freeMemory())));
+        lines.add(new TitledLine("JVM Maximum Heap", Runtime.getRuntime().maxMemory() == Long.MAX_VALUE ? "unlimited" : byteCountToDisplaySize(Runtime.getRuntime().maxMemory())));
+
+        Set<String> memoryArgs = runtimeBean.getInputArguments().stream()
+                .filter(s -> s.startsWith("-X"))
+                .collect(Collectors.toCollection(TreeSet::new));
+        lines.add(new TitledLine("JVM Memory Args", String.join(" ", memoryArgs)));
+        lines.add(new BlankLine());
+
+        lines.add(new TitledLine("Memory", "used/max"));
+        lines.add(new TitledLine("Heap", formatMemoryUsage(memoryBean.getHeapMemoryUsage())));
+        lines.add(new TitledLine("Non Heap", formatMemoryUsage(memoryBean.getNonHeapMemoryUsage())));
+        lines.add(new BlankLine());
+
+        // "PS Eden Space", "PS Survivor Space", "PS Old Gen" == -XX:+UseParallelGC, Sun Parallel GC
+        // "CMS Old Gen", "CMS Perm Gen" == -XX:+UseConcMarkSweepGC, Sun Concurrent Mark Sweep GC
+        // "Par Eden Space", "Par Survivor Space" == -XX:+UseParNewGC, Parallel GC for young (OK to use with CMS GC)
+        // "G1 Eden", "G1 Survivor", "G1 Old Gen", "G1 Perm Gen" == -X G1
+
+        lines.add(new TitledLine("Collector", "used/max"));
+
+        String[] poolPrintOrder = new String[] { "PS Eden Space", "Par Eden Space", "Par Survivor Space",
+                "PS Survivor Space", "PS Old Gen", "CMS Old Gen", "PS Perm Gen",
+                "CMS Perm Gen", "G1 Eden", "G1 Survivor", "G1 Old Gen", "G1 Perm Gen",
+                "Code Cache", "Compressed Class Space", "Metaspace" };
+
+        List<String> printedPools = new ArrayList<>();
+        Map<String, MemoryUsage> pools = new HashMap<>();
+        for (MemoryPoolMXBean memoryPool : memoryPoolBeans) {
+            pools.put(memoryPool.getName(), memoryPool.getUsage());
+        }
+        for (String poolKey : poolPrintOrder) {
+            MemoryUsage usage = pools.get(poolKey);
+            if (usage != null) {
+                printedPools.add(poolKey);
+                lines.add(new TitledLine(poolKey, formatMemoryUsage(usage)));
+            }
+        }
+
+        for (String pool : pools.keySet()) {
+            if (!printedPools.contains(pool)) {
+                lines.add(new TitledLine(pool + "*", formatMemoryUsage(pools.get(pool))));
+            }
+        }
+
+        lines.add(new Line.BlankLine());
+    }
+
     public void doGc() {
         for (GarbageCollectorMXBean gc : gcBeans) {
             lines.add(new TitledLine("GC " + gc.getName(), String.format("spent %s doing %d collections", formatDuration(gc.getCollectionTime(), "H:mm:ss", true), gc.getCollectionCount())));
@@ -213,7 +201,7 @@ public class JvmThreadDump
         lines.add(new Line.BlankLine());
     }
 
-    public void doDeadlockedThreads() {
+    public void doDeadlocks() {
         long[] deadlockedThreads = threadBean.findDeadlockedThreads();
         if (deadlockedThreads != null) {
             List<String> ids = Arrays.stream(deadlockedThreads).mapToObj(l -> "0x" + Long.toHexString(l)).collect(Collectors.toList());
@@ -221,6 +209,20 @@ public class JvmThreadDump
         }
         else {
             lines.add(new Line.TitledLine("Deadlocked Threads", "None"));
+        }
+    }
+
+    private void doThreads() {
+        ThreadDumpProducer producer = new ThreadDumpProducer();
+        Map<Thread, StackTraceElement[]> threads = producer.getThreads();
+        lines.add(new Line.TitledLine("Thread Count", String.valueOf(threads.size())));
+        lines.add(new Line.BlankLine());
+        for (Map.Entry<Thread, StackTraceElement[]> entry : threads.entrySet()) {
+            lines.add(new TitledLine("", ThreadDumpProducer.formatThread(entry.getKey())));
+            for (StackTraceElement frame : entry.getValue()) {
+                lines.add(new TitledLine("", ThreadDumpProducer.formatFrame(frame)));
+            }
+            lines.add(new BlankLine());
         }
     }
 

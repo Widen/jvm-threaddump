@@ -20,7 +20,8 @@ import java.math.BigInteger;
 import java.text.NumberFormat;
 import java.util.Locale;
 
-class BytesUtils {
+class BytesUtils
+{
 
     private static final NumberFormat format = NumberFormat.getNumberInstance(Locale.US);
 
@@ -50,10 +51,12 @@ class BytesUtils {
         if (size.divide(ONE_MB_BI).compareTo(BigInteger.ZERO) > 0) {
             BigInteger result = size.divide(ONE_MB_BI);
             displaySize = format.format(result) + " MB";
-        } else if (size.divide(ONE_KB_BI).compareTo(BigInteger.ZERO) > 0) {
+        }
+        else if (size.divide(ONE_KB_BI).compareTo(BigInteger.ZERO) > 0) {
             BigInteger result = size.divide(ONE_KB_BI);
             displaySize = format.format(result) + " KB";
-        } else {
+        }
+        else {
             displaySize = format.format(size) + " bytes";
         }
         return displaySize;

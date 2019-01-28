@@ -18,6 +18,20 @@ public interface Line
         }
     }
 
+    class SimpleLine implements Line
+    {
+        public SimpleLine(String value) {
+            this.value = value;
+        }
+
+        private String value;
+
+        @Override
+        public String toString() {
+            return value + "\n";
+        }
+    }
+
     class TitledLine implements Line
     {
         private String title;

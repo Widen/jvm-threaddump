@@ -7,9 +7,11 @@ import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.MemoryUsage;
 import java.lang.management.RuntimeMXBean;
+import java.lang.management.ThreadMXBean;
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
@@ -25,16 +27,15 @@ import java.util.stream.Collectors;
 
 import com.sun.management.OperatingSystemMXBean;
 
-import sun.management.ManagementFactoryHelper;
-
 import static com.widen.util.td.BytesUtils.byteCountToDisplaySize;
+import static com.widen.util.td.DurationFormatUtils.formatDuration;
 import static com.widen.util.td.Line.BlankLine;
 import static com.widen.util.td.Line.MultiLine;
 import static com.widen.util.td.Line.TitledLine;
 import static java.lang.String.format;
 import static java.lang.System.getProperty;
 
-public class TextOutput
+public class JvmThreadDump
 {
 
     private List<Line> lines = new ArrayList<>();
@@ -42,15 +43,18 @@ public class TextOutput
     private static final RuntimeMXBean runtimeBean = ManagementFactory.getRuntimeMXBean();
     private static final OperatingSystemMXBean osBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
     private static final MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
-    private static final List<MemoryPoolMXBean> memoryPoolBean = ManagementFactoryHelper.getMemoryPoolMXBeans();
-    private static final List<GarbageCollectorMXBean> gcBean = ManagementFactory.getGarbageCollectorMXBeans();
+    private static final List<MemoryPoolMXBean> memoryPoolBeans = ManagementFactory.getMemoryPoolMXBeans();
+    private static final List<GarbageCollectorMXBean> gcBeans = ManagementFactory.getGarbageCollectorMXBeans();
+    private static final ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
 
-    public TextOutput() {
+    public JvmThreadDump() {
     }
 
     public String generate() {
         doJvmInfo();
         doJvmMemory();
+        doGc();
+        doDeadlockedThreads();
         doThreads();
 
         StringBuilder sb = new StringBuilder(10_000);
@@ -62,9 +66,9 @@ public class TextOutput
 
     private void doThreads() {
         ThreadDumpProducer producer = new ThreadDumpProducer();
-        // DEADLOCKS
         Map<Thread, StackTraceElement[]> threads = producer.getThreads();
-        lines.add(new TitledLine("", String.format("___ %s active threads ___", threads.size())));
+        lines.add(new Line.TitledLine("Thread Count", String.valueOf(threads.size())));
+        lines.add(new Line.BlankLine());
         for (Map.Entry<Thread, StackTraceElement[]> entry : threads.entrySet()) {
             lines.add(new TitledLine("", ThreadDumpProducer.formatThread(entry.getKey())));
             for (StackTraceElement frame : entry.getValue()) {
@@ -84,9 +88,9 @@ public class TextOutput
         lines.add(new TitledLine("JVM Memory Args", String.join(" ", memoryArgs)));
         lines.add(new BlankLine());
 
-        lines.add(new TitledLine("", "used/max"));
-        lines.add(new TitledLine("Heap Memory", formatMemoryUsage(memoryBean.getHeapMemoryUsage())));
-        lines.add(new TitledLine("Non Heap Memory", formatMemoryUsage(memoryBean.getNonHeapMemoryUsage())));
+        lines.add(new TitledLine("Memory", "used/max"));
+        lines.add(new TitledLine("Heap", formatMemoryUsage(memoryBean.getHeapMemoryUsage())));
+        lines.add(new TitledLine("Non Heap", formatMemoryUsage(memoryBean.getNonHeapMemoryUsage())));
         lines.add(new BlankLine());
 
         // "PS Eden Space", "PS Survivor Space", "PS Old Gen" == -XX:+UseParallelGC, Sun Parallel GC
@@ -103,7 +107,7 @@ public class TextOutput
 
         List<String> printedPools = new ArrayList<>();
         Map<String, MemoryUsage> pools = new HashMap<>();
-        for (MemoryPoolMXBean memoryPool : memoryPoolBean) {
+        for (MemoryPoolMXBean memoryPool : memoryPoolBeans) {
             pools.put(memoryPool.getName(), memoryPool.getUsage());
         }
         for (String poolKey : poolPrintOrder) {
@@ -119,6 +123,8 @@ public class TextOutput
                 lines.add(new TitledLine(pool + "*", formatMemoryUsage(pools.get(pool))));
             }
         }
+
+        lines.add(new Line.BlankLine());
     }
 
     private void doJvmInfo() {
@@ -161,7 +167,7 @@ public class TextOutput
             return "Not Available";
         }
         long millis = unit.toMillis(value);
-        return DurationFormatUtils.formatDuration(millis, "d 'days', H:mm:ss", true);
+        return formatDuration(millis, "d 'days', H:mm:ss", true);
     }
 
     private Uptime systemUptimeSeconds() {
@@ -200,53 +206,22 @@ public class TextOutput
                 byteCountToDisplaySize(usage.getMax()));
     }
 
-    public void garbageCollections(List<GarbageCollectorMXBean> garbageCollectors) {
-        for (GarbageCollectorMXBean gc : garbageCollectors) {
-            //out.println(leftPad("GC " + gc.getName() + ": ", 25) + "spent " + DurationFormatUtils.formatDuration(gc.getCollectionTime(), "H:mm:ss") + " doing " + gc.getCollectionCount() + " collections");
+    public void doGc() {
+        for (GarbageCollectorMXBean gc : gcBeans) {
+            lines.add(new TitledLine("GC " + gc.getName(), String.format("spent %s doing %d collections", formatDuration(gc.getCollectionTime(), "H:mm:ss", true), gc.getCollectionCount())));
         }
+        lines.add(new Line.BlankLine());
     }
 
-    private void printCollectionOnMultipleRows(Collection<String> input, int maxRowLength) {
-//        List<String> items = new ArrayList<>();
-//        items.addAll(input);
-//
-//        Collections.sort(items);
-//
-//        boolean addLineBreak = false;
-//        int rowLength = 0;
-//
-//        for (int i = 0; i < items.size(); i++) {
-//            String text = items.get(i);
-//
-//            if (i > 0) {
-//                out.print(", ");
-//                if (addLineBreak) {
-//                    addLineBreak = false;
-//                    rowLength = 0;
-//                    out.print("\n" + StringUtils.repeat(" ", 25));
-//                }
-//            }
-//
-//            if (i < (items.size() - 1)) {
-//                rowLength += text.length();
-//                String peekText = items.get(i + 1);
-//                addLineBreak = (rowLength + peekText.length()) > maxRowLength;
-//            }
-//
-//            out.print(text);
-//        }
-//
-//        out.println();
-    }
-
-
-    public void deadlockedThreads(long[] deadlockedThreads) {
-//        out.print("*** deadlocks: ");
-//        for (long deadlockedThread : deadlockedThreads) {
-//            out.print("0x" + Long.toHexString(deadlockedThread) + " ");
-//        }
-//        out.println();
-//        out.println();
+    public void doDeadlockedThreads() {
+        long[] deadlockedThreads = threadBean.findDeadlockedThreads();
+        if (deadlockedThreads != null) {
+            List<String> ids = Arrays.stream(deadlockedThreads).mapToObj(l -> "0x" + Long.toHexString(l)).collect(Collectors.toList());
+            lines.add(new TitledLine("Deadlocked Threads", String.join(", ", ids)));
+        }
+        else {
+            lines.add(new Line.TitledLine("Deadlocked Threads", "None"));
+        }
     }
 
 }

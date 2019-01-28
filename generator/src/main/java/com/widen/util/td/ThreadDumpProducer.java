@@ -1,14 +1,11 @@
 package com.widen.util.td;
 
-import com.sun.management.HotSpotDiagnosticMXBean;
-import com.sun.management.OperatingSystemMXBean;
-
-import javax.management.MBeanServer;
-import java.lang.management.*;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.text.SimpleDateFormat;
-import java.util.*;
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadInfo;
+import java.lang.management.ThreadMXBean;
+import java.util.Comparator;
+import java.util.Map;
+import java.util.TreeMap;
 
 public class ThreadDumpProducer {
 
@@ -21,21 +18,15 @@ public class ThreadDumpProducer {
     }
 
     Map<Thread, StackTraceElement[]> getThreads() {
-        Map<Thread, StackTraceElement[]> dumpUnsorted = Thread.getAllStackTraces();
-
-        Map<Thread, StackTraceElement[]> dump = new TreeMap<Thread, StackTraceElement[]>(
-                new Comparator<Object>() {
-                    public int compare(Object o1, Object o2) {
-                        Thread t1 = (Thread) o1;
-                        Thread t2 = (Thread) o2;
-
-                        String t1Name = t1.getName() + t1.getId(); //do not throw away duplicate named threads
-                        String t2Name = t2.getName() + t2.getId();
-
-                        return t1Name.compareToIgnoreCase(t2Name);
-                    }
+        Map<Thread, StackTraceElement[]> dump = new TreeMap<>(
+                (Comparator<Object>) (lhs, rhs) -> {
+                    Thread t1 = (Thread) lhs;
+                    Thread t2 = (Thread) rhs;
+                    String t1Name = t1.getName() + t1.getId(); //do not throw away duplicate named threads
+                    String t2Name = t2.getName() + t2.getId();
+                    return t1Name.compareToIgnoreCase(t2Name);
                 });
-        dump.putAll(dumpUnsorted);
+        dump.putAll(Thread.getAllStackTraces());
         return dump;
     }
 

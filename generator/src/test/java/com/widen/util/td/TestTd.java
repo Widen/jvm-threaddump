@@ -4,9 +4,9 @@ public class TestTd {
 
     public static void main(String[] args) {
         //PrintWriter printer = new PrintWriter(System.out, true);
-        //TextOutput output = new TextOutput(printer);
+        //JvmThreadDump output = new JvmThreadDump(printer);
 
-        TextOutput out = new TextOutput();
+        JvmThreadDump out = new JvmThreadDump();
         System.out.println(out.generate());
     }
 

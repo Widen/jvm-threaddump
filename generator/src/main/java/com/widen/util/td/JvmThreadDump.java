@@ -13,6 +13,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -74,7 +75,15 @@ public class JvmThreadDump
         lines.add(new TitledLine("Temp Directory", getProperty("java.io.tmpdir")));
         lines.add(new BlankLine());
 
-        lines.add(new TitledLine("Main Arguments", String.join(" ", runtimeBean.getInputArguments())));
+        Map<String, String> custom = getCustomValues();
+        if (!custom.isEmpty()) {
+            for (Map.Entry<String, String> entry : custom.entrySet()) {
+                lines.add(new TitledLine(entry.getKey(), entry.getValue()));
+            }
+            lines.add(new BlankLine());
+        }
+
+        lines.add(new TitledLine("Main Arguments", String.join(" ", getMainArguments())));
         lines.add(new TitledLine("Default Encoding", getProperty("file.encoding")));
         lines.add(new MultiLine("JVM System Props", systemProperties()));
         lines.add(new BlankLine());
@@ -91,6 +100,20 @@ public class JvmThreadDump
         lines.add(new TitledLine("JVM Uptime", formatTime(runtimeBean.getUptime(), TimeUnit.MILLISECONDS)));
         lines.add(new TitledLine("JVM CPU Time", formatTime(osBean.getProcessCpuTime(), TimeUnit.NANOSECONDS)));
         lines.add(new BlankLine());
+    }
+
+    /**
+     * Overridable if another mechanism is preferred...
+     */
+    protected List<String> getMainArguments() {
+        return runtimeBean.getInputArguments();
+    }
+
+    /**
+     * Custom values to be outputted...
+     */
+    protected Map<String, String> getCustomValues() {
+        return Collections.emptyMap();
     }
 
     private Collection<String> systemProperties() {

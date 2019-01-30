@@ -29,6 +29,26 @@ Servlet configuration:
   </web-app>
 ```
 
+Methods overridable for customization:
+
+  - `List<String> getMainArguments()`
+    - The default method returns `RuntimeMXBean.getInputArguments()`
+  - `Map<String, String> getCustomValues()`
+    - Useful if you have environment specific information to aid in debugging the application.
+
+```
+ static class CustomImpl extends JvmThreadDump
+ {
+     @Override
+     protected Map<String, String> getCustomValues() {
+         HashMap<String, String> map = new HashMap<>();
+         map.put("Hello", "World");
+         map.put("Blah", "Foo");
+         return map;
+     }
+ }
+```
+
 ## Glossary
 
   - `Hostname`: `System.getenv('HOSTNAME')`

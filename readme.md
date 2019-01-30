@@ -1,10 +1,10 @@
-! Simple JVM Thread Dump
+# Simple JVM Thread Dump
 
 This project formats JVM info as simple text. It works well as a zero-configuration debugging tool for web-based applications.
 
 There are no classpath dependencies; all utility classes are included and package private.
 
-! Usage
+## Usage
 
 Direct instantiation:
 ```
@@ -27,7 +27,7 @@ Servlet configuration:
   </web-app>
 ```
 
-! Glossary
+## Glossary
 
   - `Hostname`: `System.getenv('HOSTNAME')`
   - `CPU Load`: [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
@@ -141,6 +141,6 @@ Compressed Class Space: 81%/0%        init=0 bytes     used=827 KB      commit=1
 "Signal Dispatcher" daemon priority=9 id=0x4 group=system cpu=0ms block_cnt=0 wait_cnt=0 RUNNABLE
 ```
 
-! License
+## License
 
 Apache, Version 2.0

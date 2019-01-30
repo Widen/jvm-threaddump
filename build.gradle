@@ -1,13 +1,13 @@
 plugins {
-    id 'nebula.release' version '6.3.5'
-    id 'nebula.maven-publish' version '7.2.4'
+    id 'nebula.release' version '9.2.0'
+    id 'nebula.maven-publish' version '9.4.6'
 }
 
 subprojects {
     apply plugin: 'java'
     apply plugin: 'idea'
     apply plugin: 'nebula.release'
-    apply plugin: 'maven-publish'
+    apply plugin: 'nebula.maven-publish'
     apply plugin: 'nebula.source-jar'
 
     group = 'widen'

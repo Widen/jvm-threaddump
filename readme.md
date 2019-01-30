@@ -8,6 +8,8 @@ There are no classpath dependencies; all utility classes are included and packag
 
 Direct instantiation:
 ```
+  import com.widen.util.td.ThreadDumpServlet;
+
   JvmThreadDump out = new JvmThreadDump();
   String dump = out.generate();
   System.out.println(dump);

@@ -16,7 +16,7 @@
  */
 package com.widen.util.td;
 
-public class StringUtils {
+class StringUtils {
 
 
     /**

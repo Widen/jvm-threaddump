@@ -83,7 +83,7 @@ public class JvmThreadDump
         lines.add(new TitledLine("Operating System", format("%s (%s)", osBean.getName(), osBean.getVersion())));
         lines.add(new TitledLine("System Processors", format("%s %s", osBean.getAvailableProcessors(), osBean.getArch())));
         lines.add(new TitledLine("System Memory", String.format("%s available; %s total", byteCountToDisplaySize(osBean.getFreePhysicalMemorySize()), byteCountToDisplaySize(osBean.getTotalPhysicalMemorySize()))));
-        lines.add(new TitledLine("CPU Load", String.format("%.4f system; %.4f jvm", osBean.getSystemCpuLoad(), osBean.getProcessCpuLoad())));
+        lines.add(new TitledLine("CPU Load", String.format("%.4f system; %.4f jvm (0.0 to 1.0)", osBean.getSystemCpuLoad(), osBean.getProcessCpuLoad())));
 
         Uptime systemUptime = systemUptimeSeconds();
         lines.add(new TitledLine("System Uptime", formatTime(systemUptime.uptime, TimeUnit.SECONDS)));
@@ -120,15 +120,13 @@ public class JvmThreadDump
 
     private class Uptime
     {
-
         long uptime;
-
         long idletime;
-        public Uptime(long uptime, long idletime) {
+
+        Uptime(long uptime, long idletime) {
             this.uptime = uptime;
             this.idletime = idletime;
         }
-
     }
 
     private String formatMemoryUsage(MemoryUsage usage) {

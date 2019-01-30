@@ -2,6 +2,38 @@
 
 This project formats JVM info as simple text. It works well as a zero-configuration debugging tool for web-based applications.
 
+There are no classpath dependencies; all utility classes are included and package private.
+
+! Usage
+
+Direct instantiation:
+```
+  JvmThreadDump out = new JvmThreadDump();
+  String dump = out.generate();
+  System.out.println(dump);
+```
+
+Servlet configuration:
+```
+  <web-app>
+    <servlet>
+      <servlet-name>threaddump</servlet-name>
+      <servlet-class>com.widen.util.td.ThreadDumpServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+      <servlet-name>threaddump</servlet-name>
+      <url-pattern>/td</url-pattern>
+    </servlet-mapping>
+  </web-app>
+```
+
+! Glossary
+
+  - `Hostname`: `System.getenv('HOSTNAME')`
+  - `CPU Load`: [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
+  [JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)
+  - `System Uptime`: Linux only; parsed from file `/proc/uptime`
+
 ! Example Output
 
 ```

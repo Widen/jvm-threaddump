@@ -36,7 +36,7 @@ Servlet configuration:
   [JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)
   - `System Uptime`: Linux only; parsed from file `/proc/uptime`
 
-! Example Output
+## Example Output
 
 ```
           Current Time: 01/30/2019 11:18:17 CST

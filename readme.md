@@ -78,7 +78,7 @@ public class MyAppThreadDumpServlet extends HttpServlet
     {
         private Map<String, String> map;
 
-        public MicaThreadDump(Map<String, String> map)
+        public MyAppThreadDump(Map<String, String> map)
         {
             this.map = map;
         }

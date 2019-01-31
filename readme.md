@@ -8,53 +8,107 @@ There are no classpath dependencies; all utility classes are included and packag
 
 Direct instantiation:
 ```
-  import com.widen.util.td.ThreadDumpServlet;
+import com.widen.util.td.ThreadDumpServlet;
 
-  JvmThreadDump out = new JvmThreadDump();
-  String dump = out.generate();
-  System.out.println(dump);
+JvmThreadDump out = new JvmThreadDump();
+String dump = out.generate();
+System.out.println(dump);
 ```
 
 Servlet configuration:
 ```
-  <web-app>
-    <servlet>
-      <servlet-name>threaddump</servlet-name>
-      <servlet-class>com.widen.util.td.ThreadDumpServlet</servlet-class>
-    </servlet>
-    <servlet-mapping>
-      <servlet-name>threaddump</servlet-name>
-      <url-pattern>/td</url-pattern>
-    </servlet-mapping>
-  </web-app>
+<web-app>
+  <servlet>
+    <servlet-name>threaddump</servlet-name>
+    <servlet-class>com.widen.util.td.ThreadDumpServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>threaddump</servlet-name>
+    <url-pattern>/td</url-pattern>
+  </servlet-mapping>
+</web-app>
 ```
 
-Methods overridable for customization:
+Overridable methods for customization:
 
-  - `List<String> getMainArguments()`
-    - The default method returns `RuntimeMXBean.getInputArguments()`
-  - `Map<String, String> getCustomValues()`
-    - Useful if you have environment specific information to aid in debugging the application.
+- `List<String> getMainArguments()`
+  - The default method returns an empty list.
+- `Map<String, String> getCustomValues()`
+  - Useful if you have environment specific information to aid in debugging the application.
+  - `String.valueOf(...)` is used to generate a text representation of the value Object.
+
+
+The servlet class does not directly support a custom `JvmThreadDump` class. We recommend that you copy
+the `ThreadDumpServlet` into your source tree and modify as required.
 
 ```
- static class CustomImpl extends JvmThreadDump
- {
-     @Override
-     protected Map<String, String> getCustomValues() {
-         HashMap<String, String> map = new HashMap<>();
-         map.put("Hello", "World");
-         map.put("Blah", "Foo");
-         return map;
-     }
- }
+public class MyAppThreadDumpServlet extends HttpServlet
+{
+    private final String appName;
+    private final AppEnvironment env;
+
+    public ThreadDumpServlet(String appName, AppEnvironment env)
+    {
+        this.appName = appName;
+        this.env = env;
+    }
+
+    @Override
+    public void init(ServletConfig config) throws ServletException
+    {
+        super.init(config);
+    }
+
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        Map<String, Object> map = Maps.newHashMap();
+        map.put("App", appName);
+        map.put("Environment", env);
+
+        JvmThreadDump dump = new MicaThreadDump(map);
+        String out = dump.generate();
+
+        resp.setContentType("text/plain");
+        resp.setContentLength(out.length());
+        resp.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
+        resp.setHeader("Expires", "Thu, 01 Jan 1970 12:00:00 +0000");
+        resp.setHeader("X-Accel-Expires", "off");
+        resp.setHeader("X-Robots-Tag", "noindex, nofollow");
+
+        PrintWriter writer = resp.getWriter();
+        writer.write(out);
+    }
+
+    private static class MicaThreadDump extends JvmThreadDump
+    {
+        private Map<String, String> map;
+
+        public MicaThreadDump(Map<String, String> map)
+        {
+            this.map = map;
+        }
+
+        @Override
+        protected List<String> getMainArguments()
+        {
+            return Splitter.on(" ").splitToList(System.getProperty("app.main-args", ""));
+        }
+
+        @Override
+        protected Map<String, Object> getCustomValues()
+        {
+            return map;
+        }
+    }
+}
 ```
 
 ## Glossary
 
-  - `Hostname`: `System.getenv('HOSTNAME')`
-  - `CPU Load`: [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
-  [JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)
-  - `System Uptime`: Linux only; parsed from file `/proc/uptime`
+- `Hostname`: `System.getenv('HOSTNAME')`
+- `CPU Load`: [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
+[JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)
+- `System Uptime`: Linux only; parsed from file `/proc/uptime`
 
 ## Example Output
 
@@ -67,7 +121,7 @@ Methods overridable for customization:
      Working Directory: /Users/uriah/dev/github/jvm-threaddump/generator
         Temp Directory: /var/folders/ws/ydsf0xgn6mn849zk7rp25fgxl7sq5r/T/
 
-        Main Arguments: -ea -Xmx256m -Didea.test.cyclic.buffer.size=1048576 -javaagent:/Applications/IntelliJ IDEA.app/Contents/lib/idea_rt.jar=60184:/Applications/IntelliJ IDEA.app/Contents/bin -Dfile.encoding=UTF-8
+        Main Arguments:
       Default Encoding: UTF-8
       JVM System Props: -Dfile.encoding=UTF-8
                         -Didea.test.cyclic.buffer.size=1048576

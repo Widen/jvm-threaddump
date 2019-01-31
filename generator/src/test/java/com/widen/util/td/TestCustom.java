@@ -13,6 +13,13 @@ import static org.junit.Assert.assertThat;
 public class TestCustom
 {
 
+    static class MyObj {
+        @Override
+        public String toString() {
+            return "Custom toString...";
+        }
+    }
+
     static class CustomImpl extends JvmThreadDump
     {
         @Override
@@ -21,10 +28,10 @@ public class TestCustom
         }
 
         @Override
-        protected Map<String, String> getCustomValues() {
-            HashMap<String, String> map = new HashMap<>();
+        protected Map<String, Object> getCustomValues() {
+            HashMap<String, Object> map = new HashMap<>();
             map.put("Hello", "World");
-            map.put("Blah", "Foo");
+            map.put("Blah", new MyObj());
             return map;
         }
     }
@@ -34,7 +41,7 @@ public class TestCustom
         JvmThreadDump out = new CustomImpl();
         String dump = out.generate();
         assertThat(dump, containsString("Hello: World"));
-        assertThat(dump, containsString("Blah: Foo"));
+        assertThat(dump, containsString("Blah: Custom toString..."));
         assertThat(dump, containsString("Main Arguments: foo blah"));
         System.out.println(dump);
     }

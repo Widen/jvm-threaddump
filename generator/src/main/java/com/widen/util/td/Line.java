@@ -14,7 +14,7 @@ public interface Line
     {
         @Override
         public String toString() {
-            return "\n";
+            return String.format("%n");
         }
     }
 
@@ -28,7 +28,7 @@ public interface Line
 
         @Override
         public String toString() {
-            return value + "\n";
+            return String.format("%s%n", value  );
         }
     }
 
@@ -44,7 +44,7 @@ public interface Line
 
         @Override
         public String toString() {
-            return String.format("%" + Line.PADDING + "s: %s%n", title, value);
+            return String.format("%" + PADDING + "s: %s%n", title, value);
         }
     }
 
@@ -61,10 +61,10 @@ public interface Line
         @Override
         public String toString() {
             StringBuilder sb = new StringBuilder();
-            sb.append(String.format("%" + Line.PADDING + "s: %s%n", title, values.stream().findFirst().orElse("")));
+            sb.append(String.format("%" + PADDING + "s: %s%n", title, values.stream().findFirst().orElse("")));
             if (values.size() > 1) {
                 List<String> remaining = values.subList(1, values.size());
-                remaining.forEach(s -> sb.append(String.format("%" + Line.PADDING + "s  %s%n", "", s)));
+                remaining.forEach(s -> sb.append(String.format("%" + PADDING + "s  %s%n", "", s)));
             }
             return sb.toString();
         }

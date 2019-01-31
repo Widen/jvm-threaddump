@@ -75,10 +75,10 @@ public class JvmThreadDump
         lines.add(new TitledLine("Temp Directory", getProperty("java.io.tmpdir")));
         lines.add(new BlankLine());
 
-        Map<String, String> custom = getCustomValues();
+        Map<String, Object> custom = getCustomValues();
         if (!custom.isEmpty()) {
-            for (Map.Entry<String, String> entry : custom.entrySet()) {
-                lines.add(new TitledLine(entry.getKey(), entry.getValue()));
+            for (Map.Entry<String, Object> entry : custom.entrySet()) {
+                lines.add(new TitledLine(entry.getKey(), String.valueOf(entry.getValue())));
             }
             lines.add(new BlankLine());
         }
@@ -106,19 +106,20 @@ public class JvmThreadDump
      * Overridable if another mechanism is preferred...
      */
     protected List<String> getMainArguments() {
-        return runtimeBean.getInputArguments();
+        return Collections.emptyList();
     }
 
     /**
      * Custom values to be outputted...
      */
-    protected Map<String, String> getCustomValues() {
+    protected Map<String, Object> getCustomValues() {
         return Collections.emptyMap();
     }
 
     private Collection<String> systemProperties() {
         return runtimeBean.getInputArguments().stream()
                 .filter(s -> s.startsWith("-D"))
+                .map(s -> s.substring(2))
                 .collect(Collectors.toCollection(TreeSet::new));
     }
 

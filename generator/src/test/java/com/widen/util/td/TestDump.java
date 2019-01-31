@@ -21,6 +21,7 @@ public class TestDump
         String dump = out.generate();
         assertThat(dump, containsString("Memory: used/max"));
         assertThat(dump, containsString("Deadlocked Threads: None"));
+        assertThat(dump, containsString("file.encoding=UTF-8"));
     }
 
 }

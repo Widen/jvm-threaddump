@@ -29,6 +29,8 @@ Servlet configuration:
 </web-app>
 ```
 
+## Customization
+
 Overridable methods for customization:
 
 - `List<String> getMainArguments()`

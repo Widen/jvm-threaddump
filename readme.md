@@ -60,7 +60,7 @@ public class MyAppThreadDumpServlet extends HttpServlet
         map.put("App", appName);
         map.put("Environment", env);
 
-        JvmThreadDump dump = new MicaThreadDump(map);
+        JvmThreadDump dump = new MyAppThreadDump(map);
         String out = dump.generate();
 
         resp.setContentType("text/plain");
@@ -74,7 +74,7 @@ public class MyAppThreadDumpServlet extends HttpServlet
         writer.write(out);
     }
 
-    private static class MicaThreadDump extends JvmThreadDump
+    private static class MyAppThreadDump extends JvmThreadDump
     {
         private Map<String, String> map;
 

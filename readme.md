@@ -33,13 +33,12 @@ Overridable methods for customization:
 
 - `List<String> getMainArguments()`
   - The default method returns an empty list.
-- `Map<String, String> getCustomValues()`
+- `Map<String, Object> getCustomValues()`
   - Useful if you have environment specific information to aid in debugging the application.
   - `String.valueOf(...)` is used to generate a text representation of the value Object.
 
 
-The servlet class does not directly support a custom `JvmThreadDump` class. We recommend that you copy
-the `ThreadDumpServlet` into your source tree and modify as required.
+The supplied servlet does not support using a custom `JvmThreadDump` class. We recommend that you copy  `ThreadDumpServlet.java` into your source tree and modify as required.
 
 ```
 public class MyAppThreadDumpServlet extends HttpServlet
@@ -109,6 +108,7 @@ public class MyAppThreadDumpServlet extends HttpServlet
 - `CPU Load`: [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
 [JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)
 - `System Uptime`: Linux only; parsed from file `/proc/uptime`
+- `Main Arguments`: Will be empty unless you override and implement `getMainArguments()`.
 
 ## Example Output
 
@@ -123,8 +123,8 @@ public class MyAppThreadDumpServlet extends HttpServlet
 
         Main Arguments:
       Default Encoding: UTF-8
-      JVM System Props: -Dfile.encoding=UTF-8
-                        -Didea.test.cyclic.buffer.size=1048576
+      JVM System Props: file.encoding=UTF-8
+                        idea.test.cyclic.buffer.size=1048576
 
               Hostname: Not Available
       Operating System: Mac OS X (10.14.2)

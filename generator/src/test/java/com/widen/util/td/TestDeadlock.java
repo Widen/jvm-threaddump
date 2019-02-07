@@ -13,7 +13,7 @@ public class TestDeadlock
     public void testDeadlockThreadDump() throws InterruptedException {
         DeadlockThread.startThreads();
         Thread.sleep(1000);
-        JvmThreadDump out = new JvmThreadDump();
+        JvmThreadDumpImpl out = new JvmThreadDumpImpl();
         String dump = out.generate();
         assertThat(dump, containsString("Memory: used/max"));
         assertThat(dump, not(containsString("Deadlocked Threads: None")));

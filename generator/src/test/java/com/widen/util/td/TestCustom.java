@@ -20,7 +20,7 @@ public class TestCustom
         }
     }
 
-    static class CustomImpl extends JvmThreadDump
+    static class CustomImpl extends JvmThreadDumpImpl
     {
         @Override
         protected List<String> getMainArguments() {
@@ -38,7 +38,7 @@ public class TestCustom
 
     @Test
     public void testJvmThreadDump() {
-        JvmThreadDump out = new CustomImpl();
+        JvmThreadDumpImpl out = new CustomImpl();
         String dump = out.generate();
         assertThat(dump, containsString("Hello: World"));
         assertThat(dump, containsString("Blah: Custom toString..."));

@@ -14,10 +14,10 @@ subprojects {
 
     repositories {
         maven {
-            url 'https://widen.jfrog.io/widen/repo/'
+            url 'https://jfrog.ais.acquia.io/artifactory/widen-java-virtual/'
             credentials {
-                username System.env.JFROG_USER ?: USER
-                password System.env.JFROG_PASS ?: PASSWORD
+                username System.env.ACQUIA_JFROG_USER ?: ACQUIA_JFROG_USER
+                password System.env.ACQUIA_JFROG_TOKEN ?: ACQUIA_JFROG_TOKEN
             }
             authentication {
                 basic(BasicAuthentication)
@@ -29,10 +29,10 @@ subprojects {
         repositories {
             maven {
                 def repo = project.version.toString().findAll(/dev\.\d+(\.uncommitted)?\+/).isEmpty() ? 'libs-releases-local' : 'libs-snapshots-local'
-                url "https://widen.jfrog.io/widen/${repo}"
+                url "https://jfrog.ais.acquia.io/artifactory/${repo}"
                 credentials {
-                    username System.env.JFROG_USER ?: USER
-                    password System.env.JFROG_PASS ?: PASSWORD
+                    username System.env.ACQUIA_JFROG_USER ?: ACQUIA_JFROG_USER
+                    password System.env.ACQUIA_JFROG_TOKEN ?: ACQUIA_JFROG_TOKEN
                 }
                 authentication {
                     basic(BasicAuthentication)

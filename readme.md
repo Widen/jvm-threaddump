@@ -101,8 +101,27 @@ public class MyAppThreadDumpServlet extends ThreadDumpServlet
 }
 ```
 
-Register the subclass in `web.xml` as shown above, or register it
-programmatically when the servlet needs constructor arguments.
+A container creates a servlet from `web.xml` only through a public no-arg
+constructor, so register a servlet that has constructor arguments in code.
+
+```java
+import javax.servlet.ServletContextEvent;
+import javax.servlet.ServletContextListener;
+
+public class ThreadDumpRegistration implements ServletContextListener
+{
+    @Override
+    public void contextInitialized(ServletContextEvent event) {
+        event.getServletContext()
+                .addServlet("threaddump", new MyAppThreadDumpServlet("cheese", "test"))
+                .addMapping("/td");
+    }
+
+    @Override
+    public void contextDestroyed(ServletContextEvent event) {
+    }
+}
+```
 
 ## Glossary
 
@@ -170,12 +189,12 @@ Compressed Class Space: 81%/0%        init=0 bytes     used=827 KB      commit=1
     java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:165)
     java.lang.ref.Finalizer$FinalizerThread.run(Finalizer.java:216)
 
-"main" priority=5 id=0x1 group=main cpu=405ms block_cnt=0 wait_cnt=0 RUNNABLE
-    java.lang.Thread.dumpThreads(Thread.java)
-    java.lang.Thread.getAllStackTraces(Thread.java:1610)
-    com.widen.util.td.ThreadSection.lines(ThreadSection.java:37)
+"Test worker" priority=5 id=0x1 group=main cpu=405ms block_cnt=0 wait_cnt=0 RUNNABLE
+    sun.management.ThreadImpl.dumpThreads0(Native Method)
+    sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:454)
+    com.widen.util.td.ThreadSection.lines(ThreadSection.java:38)
     com.widen.util.td.JvmThreadDump.generate(JvmThreadDump.java:53)
-    com.widen.util.td.TestDump.dumpToStdOut(TestDump.java:14)
+    com.widen.util.td.TestDump.printsEverySectionOfTheRunningJvm(TestDump.java:12)
     sun.reflect.NativeMethodAccessorImpl.invoke0(NativeMethodAccessorImpl.java)
     sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
     sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)

@@ -138,6 +138,9 @@ public class TestJvmSnapshot
         GarbageCollectorMXBean collector = jvm.addCollector("G1 Young Generation", 5, 100);
         when(collector.getCollectionCount()).thenReturn(5L, 7L);
         when(collector.getCollectionTime()).thenReturn(100L, 400L);
+        GarbageCollectorMXBean undefined = jvm.addCollector("Undefined", -1, -1);
+        when(undefined.getCollectionCount()).thenReturn(-1L, 3L);
+        when(undefined.getCollectionTime()).thenReturn(-1L, 50L);
         com.sun.management.OperatingSystemMXBean os = (com.sun.management.OperatingSystemMXBean) jvm.operatingSystem;
         when(os.getSystemCpuLoad()).thenReturn(0.10, 0.95);
         when(os.getProcessCpuLoad()).thenReturn(0.05, 0.40);
@@ -152,12 +155,14 @@ public class TestJvmSnapshot
         assertThat(snapshot.threads.get(0).windowAllocatedBytes).isEqualTo(100 * MB);
         assertThat(snapshot.threads.get(1).windowCpuNanos).isEqualTo(200_000_000L);
         assertThat(snapshot.threads.get(1).windowAllocatedBytes).isEqualTo(5 * MB);
-        assertThat(snapshot.collectors).singleElement().satisfies(gc -> {
-            assertThat(gc.windowCount).isEqualTo(2);
-            assertThat(gc.windowTimeMillis).isEqualTo(300);
-            assertThat(gc.count).isEqualTo(7);
-            assertThat(gc.timeMillis).isEqualTo(400);
-        });
+        GcSnapshot gc = snapshot.collectors.get(0);
+        assertThat(gc.windowCount).isEqualTo(2);
+        assertThat(gc.windowTimeMillis).isEqualTo(300);
+        assertThat(gc.count).isEqualTo(7);
+        assertThat(gc.timeMillis).isEqualTo(400);
+        GcSnapshot undefinedAtStart = snapshot.collectors.get(1);
+        assertThat(undefinedAtStart.windowCount).isEqualTo(0);
+        assertThat(undefinedAtStart.windowTimeMillis).isEqualTo(0);
         assertThat(snapshot.systemCpuLoad).isEqualTo(0.95);
         assertThat(snapshot.processCpuLoad).isEqualTo(0.40);
     }
@@ -205,6 +210,21 @@ public class TestJvmSnapshot
         assertThat(snapshot.threads.get(0).windowAllocatedBytes).isEqualTo(-1);
         assertThat(snapshot.collectors.get(0).windowCount).isEqualTo(0);
         assertThat(snapshot.collectors.get(0).windowTimeMillis).isEqualTo(0);
+    }
+
+    @Test
+    void skipsTheWindowForAThreadThatIsAlreadyInterrupted() {
+        FakeJvm jvm = jvmWithCpuAndAllocation();
+        jvm.addThread("main", 1, Thread.State.RUNNABLE);
+        Thread.currentThread().interrupt();
+
+        JvmSnapshot snapshot = JvmSnapshot.read(jvm, Duration.ofSeconds(1));
+
+        boolean stillInterrupted = Thread.interrupted();
+        assertThat(jvm.pauses).isEqualTo(0);
+        assertThat(snapshot.sampled()).isFalse();
+        assertThat(snapshot.threads.get(0).windowCpuNanos).isEqualTo(-1);
+        assertThat(stillInterrupted).isTrue();
     }
 
     @Test

@@ -60,9 +60,9 @@ final class JvmSnapshot
     }
 
     /**
-     * Reads the JVM, pausing for {@code window} between a start and an end reading when it is above zero. The pause
-     * ends early when the calling thread is interrupted, and the interrupt flag stays set. The snapshot counts as
-     * sampled only when time passed.
+     * Reads the JVM, pausing for {@code window} between a start and an end reading when it is above zero. A thread
+     * that is already interrupted skips the window. An interrupt during the pause ends it early. Either way the
+     * interrupt flag stays set, and the snapshot counts as sampled only when time passed.
      */
     static JvmSnapshot read(JvmSources jvm, Duration window) {
         ThreadMXBean threadBean = jvm.threads();
@@ -77,10 +77,10 @@ final class JvmSnapshot
 
         WindowStart start = null;
         long windowNanos = 0;
-        if (!window.isZero() && !window.isNegative()) {
+        if (!window.isZero() && !window.isNegative() && !Thread.currentThread().isInterrupted()) {
             long startNanos = jvm.nanoTime();
-            start = WindowStart.read(jvm, cpuTimeAvailable ? threadBean : null,
-                    allocationAvailable ? sunThreadBean : null, sunOs);
+            start = WindowStart.read(jvm, threadBean, cpuTimeAvailable, allocationAvailable ? sunThreadBean : null,
+                    sunOs);
             try {
                 jvm.pause(window);
             }
@@ -136,7 +136,7 @@ final class JvmSnapshot
             long windowTimeMillis = 0;
             long[] before = sampled ? start.collectors.get(name) : null;
             if (before != null) {
-                windowCount = count - before[0];
+                windowCount = count >= 0 && before[0] >= 0 ? count - before[0] : 0;
                 windowTimeMillis = timeMillis >= 0 && before[1] >= 0 ? timeMillis - before[1] : 0;
             }
             collectors.add(new GcSnapshot(name, count, timeMillis, windowCount, windowTimeMillis));
@@ -190,16 +190,16 @@ final class JvmSnapshot
         final Map<String, long[]> collectors = new HashMap<>();
 
         /**
-         * @param cpuTimeBean the bean to read CPU time from, or null to skip it
+         * @param readCpuTime whether to read CPU time from {@code threadBean}
          * @param allocationBean the bean to read allocated bytes from, or null to skip it
          * @param os the bean whose CPU loads start their measuring span, or null
          */
-        static WindowStart read(JvmSources jvm, ThreadMXBean cpuTimeBean,
+        static WindowStart read(JvmSources jvm, ThreadMXBean threadBean, boolean readCpuTime,
                 com.sun.management.ThreadMXBean allocationBean, com.sun.management.OperatingSystemMXBean os) {
             WindowStart start = new WindowStart();
-            for (long id : jvm.threads().getAllThreadIds()) {
-                if (cpuTimeBean != null) {
-                    start.cpuNanos.put(id, cpuTimeBean.getThreadCpuTime(id));
+            for (long id : threadBean.getAllThreadIds()) {
+                if (readCpuTime) {
+                    start.cpuNanos.put(id, threadBean.getThreadCpuTime(id));
                 }
                 if (allocationBean != null) {
                     start.allocatedBytes.put(id, allocationBean.getThreadAllocatedBytes(id));

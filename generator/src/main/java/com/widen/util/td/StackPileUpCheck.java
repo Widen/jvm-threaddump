@@ -19,8 +19,7 @@ final class StackPileUpCheck implements Check
     static final int MIN_THREADS = 10;
     private static final int NAMES_SHOWN = 3;
 
-    private static final List<String> IDLE_PREFIXES = Arrays.asList(
-            "java.", "javax.", "jdk.", "sun.", "com.sun.",
+    private static final List<String> LIBRARY_PREFIXES = Arrays.asList(
             "org.eclipse.jetty.", "org.apache.tomcat.", "org.apache.catalina.", "io.netty.", "com.zaxxer.hikari.");
 
     @Override
@@ -75,7 +74,8 @@ final class StackPileUpCheck implements Check
             return false;
         }
         for (StackTraceElement frame : stack) {
-            if (!StackFilter.startsWithAny(frame.getClassName(), IDLE_PREFIXES)) {
+            String className = frame.getClassName();
+            if (!StackFilter.isJdk(className) && !StackFilter.startsWithAny(className, LIBRARY_PREFIXES)) {
                 return false;
             }
         }

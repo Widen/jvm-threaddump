@@ -38,7 +38,6 @@ final class MemorySection
 
     private final JvmSources jvm;
     private final JvmSnapshot snapshot;
-
     private final Findings findings;
 
     MemorySection(JvmSources jvm, JvmSnapshot snapshot, Findings findings) {

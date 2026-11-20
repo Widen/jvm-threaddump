@@ -222,10 +222,13 @@ Notes on the checks:
   `Lock Pile-up` also stay out of the count. The finding prints the count, the
   count per thread state, the top frame, the library frame when it differs from
   the top frame, and the first three thread names. It marks no lines.
-- **Heap Full** needs both readings at 90%. The current usage includes garbage,
-  so a healthy Parallel or Serial old generation passes 90% before every full
-  collection. The usage after the last collection can be hours old. The check
-  skips a pool with no after-collection reading or no defined max.
+- **Heap Full** checks old-generation pools: heap pools whose name contains
+  `Old` or `Tenured`, and the JVM's only heap pool, such as the one that
+  Shenandoah or non-generational ZGC reports. It needs both readings at 90%. The
+  current usage includes garbage, so a healthy Parallel or Serial old generation
+  passes 90% before every full collection. The usage after the last collection
+  can be hours old. The check skips a pool with no after-collection reading or
+  no defined max.
 - **GC Overhead** leaves out collectors that report concurrent work instead of
   pauses (names that contain `Cycles` or `Concurrent`). The lifetime measure is
   an average since the JVM started. It runs with or without a window, but only

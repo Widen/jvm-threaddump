@@ -25,7 +25,7 @@ compiled at `options.release = 8`, tests run by `test` (Java 17) and
 `docs/superpowers/specs/2026-11-19-modernize-build-and-tests-design.md`
 (layer 2)
 
-**Issue:** https://github.com/Widen/jvm-threaddump/issues/3
+**Issue:** <https://github.com/Widen/jvm-threaddump/issues/3>
 
 **Prerequisite:** layer 1 (`modernize-1-gradle-9`) includes the commit that
 moves the toolchain to Java 17 with `options.release = 8` and adds
@@ -110,7 +110,8 @@ moves the toolchain to Java 17 with `options.release = 8` and adds
   `static List<String> render(List<? extends Line> lines)` (the rendered text
   split on `System.lineSeparator()`, without the final empty element),
   `static String titled(String title, String value)`
-  (`String.format("%22s: %s", ...)`), and `static String continued(String value)`
+  (`String.format("%22s: %s", ...)`), and
+  `static String continued(String value)`
   (`String.format("%22s  %s", "", value)`).
 
 - [ ] **Step 1: Add Mockito and the test locale**
@@ -248,7 +249,7 @@ before building a section. Other tasks' tests reuse it.
 | --- | --- |
 | `runtime` | mock; `getInputArguments()` = `["-Dfile.encoding=UTF-8", "-Xmx512m"]`, `getUptime()` = `90_061_000` |
 | `memory` | mock; heap `new MemoryUsage(256 MB, 64 MB, 128 MB, 256 MB)`, non-heap `new MemoryUsage(2 MB, 8 MB, 16 MB, -1)` |
-| `threads` | mock; `findDeadlockedThreads()` = null, `dumpAllThreads(true, true)` = `new ThreadInfo[0]`, CPU time unsupported |
+| `threads` | mock; `findDeadlockedThreads()` = null, `dumpAllThreads(false, false)` = `new ThreadInfo[0]`, CPU time unsupported |
 | `memoryPools`, `garbageCollectors` | empty `ArrayList`s |
 | `operatingSystem` | mock of `com.sun.management.OperatingSystemMXBean`: name `Linux`, version `5.10`, 4 processors, arch `amd64`, free physical `1 GB`, total physical `4 GB`, system CPU load `0.25`, process CPU load `0.125`, process CPU time `61_000_000_000` ns |
 | `clock` | `Clock.fixed(Instant.parse("2026-11-20T15:30:00Z"), ZoneOffset.UTC)` |
@@ -320,7 +321,8 @@ void masksSecretPropertyValues(String property, String expected)
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `mise exec -- ./gradlew :jvm-threaddump-generator:test --tests 'com.widen.util.td.TestJvmInfoSection' -q --console=plain 2>&1 | tail -40`
+Run:
+`mise exec -- ./gradlew :jvm-threaddump-generator:test --tests 'com.widen.util.td.TestJvmInfoSection' -q --console=plain 2>&1 | tail -40`
 Expected: compilation fails on `JvmSources`, `FakeJvm`, and `JvmInfoSection`.
 
 - [ ] **Step 3: Implement**
@@ -332,21 +334,21 @@ Expected: compilation fails on `JvmSources`, `FakeJvm`, and `JvmInfoSection`.
   value through `JvmSources`. Current Time uses a new
   `SimpleDateFormat("MM/dd/yyyy HH:mm:ss z")` with `setTimeZone(timeZone)` on
   `Date.from(clock.instant())`. The `com.sun.management.OperatingSystemMXBean`
-  extras are read only after an `instanceof` check; otherwise System Memory,
-  CPU Load, and JVM CPU Time print "Not Available". `/proc/uptime` content
-  that does not split into two numbers prints "Not Available" for both
-  lines. `maskSecret` splits at the first `=`; a key that contains
-  `password`, `secret`, `token`, `credential`, or `key`, ignoring case, or a
-  value that contains one of those words followed by `=`, ignoring case,
-  keeps the key and prints `****` as the value (bug fix 2). System Props collects
-  the masked values into a `TreeSet`.
+  extras are read only after an `instanceof` check; otherwise System Memory, CPU
+  Load, and JVM CPU Time print "Not Available". `/proc/uptime` content that does
+  not split into two numbers prints "Not Available" for both lines. `maskSecret`
+  splits at the first `=`; a key that contains `password`, `secret`, `token`,
+  `credential`, or `key`, ignoring case, or a value that contains one of those
+  words followed by `=`, ignoring case, keeps the key and prints `****` as the
+  value (bug fix 2). System Props collects the masked values into a `TreeSet`.
 - `JvmThreadDumpImpl`: add a package-private constructor taking `JvmSources`;
   the no-arg constructor passes `JvmSources.platform()`. Replace the static
   bean fields with reads from the held `JvmSources`, and replace `doJvmInfo`
   with `new JvmInfoSection(jvm, getMainArguments(), getCustomValues())`.
 - [ ] **Step 4: Run the module tests**
 
-Run: `mise exec -- ./gradlew :jvm-threaddump-generator:test :jvm-threaddump-generator:testOnJava8 -q --console=plain 2>&1 | tail -40; echo "exit=${PIPESTATUS[0]}"`
+Run:
+`mise exec -- ./gradlew :jvm-threaddump-generator:test :jvm-threaddump-generator:testOnJava8 -q --console=plain 2>&1 | tail -40; echo "exit=${PIPESTATUS[0]}"`
 Expected: `exit=0`.
 
 - [ ] **Step 5: Commit**
@@ -434,7 +436,8 @@ void printsKnownPoolsInCollectorOrder(List<String> reported, List<String> printe
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `mise exec -- ./gradlew :jvm-threaddump-generator:test --tests 'com.widen.util.td.Test*Section' -q --console=plain 2>&1 | tail -40`
+Run:
+`mise exec -- ./gradlew :jvm-threaddump-generator:test --tests 'com.widen.util.td.Test*Section' -q --console=plain 2>&1 | tail -40`
 Expected: compilation fails on the three section classes.
 
 - [ ] **Step 3: Implement**
@@ -449,7 +452,8 @@ replace each `do*` method with the matching section's lines.
 
 - [ ] **Step 4: Run the module tests**
 
-Run: `mise exec -- ./gradlew :jvm-threaddump-generator:test :jvm-threaddump-generator:testOnJava8 -q --console=plain 2>&1 | tail -40; echo "exit=${PIPESTATUS[0]}"`
+Run:
+`mise exec -- ./gradlew :jvm-threaddump-generator:test :jvm-threaddump-generator:testOnJava8 -q --console=plain 2>&1 | tail -40; echo "exit=${PIPESTATUS[0]}"`
 Expected: `exit=0`. `TestDump` asserts `"Memory: used/max"`; change it to
 `"Memory: used/committed, used/max"`.
 
@@ -473,10 +477,10 @@ Expected: `exit=0`. `TestDump` asserts `"Memory: used/max"`; change it to
   `static String ThreadSection.formatFrame(StackTraceElement frame)`;
   `static String ThreadSection.formatCpuTime(long nanos)`. Test helper
   `FakeThreads` with `static final ThreadGroup GROUP` named `test-group`;
-  `static Thread thread(String name, long id)` (unstarted, in `GROUP`,
-  `getId()` overridden to return `id`);
-  `static Thread thread(String name, long id, String toString)` (also
-  overrides `toString()`); and
+  `static Thread thread(String name, long id)` (unstarted, in `GROUP`, `getId()`
+  overridden to return `id`);
+  `static Thread thread(String name, long id, String toString)` (also overrides
+  `toString()`); and
   `static ThreadInfo info(long id, Thread.State state, StackTraceElement... frames)`
   (a Mockito mock with lock name null, lock owner -1, and zero blocked and
   waited counts; tests stub more as needed).
@@ -532,17 +536,19 @@ void formatsFrames(StackTraceElement frame, String expected)
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `mise exec -- ./gradlew :jvm-threaddump-generator:test --tests 'com.widen.util.td.TestThreadSection' -q --console=plain 2>&1 | tail -40`
+Run:
+`mise exec -- ./gradlew :jvm-threaddump-generator:test --tests 'com.widen.util.td.TestThreadSection' -q --console=plain 2>&1 | tail -40`
 Expected: compilation fails on `ThreadSection` and `FakeThreads`.
 
 - [ ] **Step 3: Implement**
 
-`lines()` calls `jvm.threads().dumpAllThreads(true, true)` once, indexes the
-infos by thread id, keeps each thread in `jvm.liveThreads()` whose
-`getId()` has an info, and sorts them with
-`Comparator.comparing(Thread::getName, String.CASE_INSENSITIVE_ORDER).thenComparing(Thread::getName).thenComparingLong(Thread::getId)`
-(bug fix 1). State, counts, lock, and frames come from the info; name,
-priority, daemon, group, and `toString()` come from the thread (bug fix 9).
+`lines()` calls `jvm.threads().dumpAllThreads(false, false)` once, indexes the
+infos by thread id, and keeps each thread in `jvm.liveThreads()` whose
+`getId()` has an info. It reads each thread's name and `toString()` once and
+sorts the snapshot by name ignoring case, then name, then id (bug fix 1).
+State, counts, lock, and frames come from the info; the name and
+`toString()` read once, priority, daemon, and group come from the thread (bug
+fix 9).
 The header format is
 
 ```java
@@ -560,7 +566,8 @@ threads. Replace `doThreads` in `JvmThreadDumpImpl` and delete
 
 - [ ] **Step 4: Run the module tests**
 
-Run: `mise exec -- ./gradlew :jvm-threaddump-generator:test :jvm-threaddump-generator:testOnJava8 -q --console=plain 2>&1 | tail -40; echo "exit=${PIPESTATUS[0]}"`
+Run:
+`mise exec -- ./gradlew :jvm-threaddump-generator:test :jvm-threaddump-generator:testOnJava8 -q --console=plain 2>&1 | tail -40; echo "exit=${PIPESTATUS[0]}"`
 Expected: `exit=0`.
 
 - [ ] **Step 5: Commit**
@@ -626,7 +633,8 @@ public final class JvmThreadDump
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `mise exec -- ./gradlew :jvm-threaddump-generator:test -q --console=plain 2>&1 | tail -40`
+Run:
+`mise exec -- ./gradlew :jvm-threaddump-generator:test -q --console=plain 2>&1 | tail -40`
 Expected: compilation fails on `JvmThreadDump.builder()`.
 
 - [ ] **Step 3: Implement**
@@ -642,14 +650,15 @@ and the copy at `build()`. Delete `JvmThreadDumpImpl` and `TestCustom`.
 
 - [ ] **Step 4: Run the module tests**
 
-Run: `mise exec -- ./gradlew :jvm-threaddump-generator:test :jvm-threaddump-generator:testOnJava8 -q --console=plain 2>&1 | tail -40; echo "exit=${PIPESTATUS[0]}"`
+Run:
+`mise exec -- ./gradlew :jvm-threaddump-generator:test :jvm-threaddump-generator:testOnJava8 -q --console=plain 2>&1 | tail -40; echo "exit=${PIPESTATUS[0]}"`
 Expected: `exit=0`.
 
 - [ ] **Step 5: Commit**
 
 `git commit -m "feat!: configure the dump with a builder instead of subclass hooks"`
-with a body that names the removed `JvmThreadDumpImpl` and hooks and the
-builder that replaces them.
+with a body that names the removed `JvmThreadDumpImpl` and hooks and the builder
+that replaces them.
 
 ### Task 6: `ThreadDumpServlet`
 
@@ -703,7 +712,8 @@ The response mock returns a `ServletOutputStream` subclass that writes to a
 
 - [ ] **Step 3: Run them to verify they fail**
 
-Run: `mise exec -- ./gradlew :jvm-threaddump-servlet:test -q --console=plain 2>&1 | tail -40`
+Run:
+`mise exec -- ./gradlew :jvm-threaddump-servlet:test -q --console=plain 2>&1 | tail -40`
 Expected: compilation fails on the `ThreadDumpServlet(JvmThreadDump)`
 constructor.
 
@@ -717,7 +727,8 @@ implementations. Add JavaDoc to the class and both constructors.
 
 - [ ] **Step 5: Run the module tests**
 
-Run: `mise exec -- ./gradlew test testOnJava8 -q --console=plain 2>&1 | tail -40; echo "exit=${PIPESTATUS[0]}"`
+Run:
+`mise exec -- ./gradlew test testOnJava8 -q --console=plain 2>&1 | tail -40; echo "exit=${PIPESTATUS[0]}"`
 Expected: `exit=0` for both modules.
 
 - [ ] **Step 6: Commit**
@@ -751,14 +762,15 @@ of prose, so the controller has a `sonnet` subagent copyedit it with the
 
 - [ ] **Step 2: Verify the examples compile**
 
-Copy each Java example into a scratch test class in the servlet module,
-compile with `mise exec -- ./gradlew :jvm-threaddump-servlet:compileTestJava -q --console=plain`,
-then delete the scratch class.
-Expected: no compile errors.
+Copy each Java example into a scratch test class in the servlet module, compile
+with
+`mise exec -- ./gradlew :jvm-threaddump-servlet:compileTestJava -q --console=plain`,
+then delete the scratch class. Expected: no compile errors.
 
 - [ ] **Step 3: Verify the build**
 
-Run: `mise exec -- ./gradlew clean build publishToMavenLocal -q --console=plain 2>&1 | tail -40; echo "exit=${PIPESTATUS[0]}"`
+Run:
+`mise exec -- ./gradlew clean build publishToMavenLocal -q --console=plain 2>&1 | tail -40; echo "exit=${PIPESTATUS[0]}"`
 Expected: `exit=0`, and
 `od -An -j6 -N2 -tu1 generator/build/classes/java/main/com/widen/util/td/JvmThreadDump.class`
 prints `0 52`.

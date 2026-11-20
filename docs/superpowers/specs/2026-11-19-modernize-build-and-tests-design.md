@@ -247,10 +247,12 @@ The numbers match the code review.
    and short G1 names that no supported JVM reports, and print unlisted pools
    in name order.
 9. **Consistent thread snapshot:** take state, lock, and stack from one
-   `threadBean.dumpAllThreads(true, true)` call, joined by thread id to the
-   `Thread` objects for priority, daemon status, group, and `toString()`. Print
-   the lock a thread waits on in every waiting state, not only when it has an
-   owner. Threads that end between the two calls are left out.
+   `threadBean.dumpAllThreads(false, false)` call, joined by thread id to the
+   `Thread` objects for priority, daemon status, group, and `toString()`. Read
+   each thread's name and `toString()` once, and sort that snapshot by name
+   ignoring case, then name, then id. Print the lock a thread waits on in every
+   waiting state, not only when it has an owner. Threads that end between the
+   two calls are left out.
 10. **README:** rewrite the examples for the builder and the servlet
     constructor, so they compile against the real API.
 

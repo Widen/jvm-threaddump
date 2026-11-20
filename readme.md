@@ -22,6 +22,9 @@ String dump = JvmThreadDump.create().generate();
 System.out.println(dump);
 ```
 
+`generate()` blocks for one second by default while it samples the JVM (see
+[Findings](#findings)).
+
 Servlet configuration:
 
 ```text
@@ -50,6 +53,12 @@ Build a customized dump with `JvmThreadDump.builder()`:
     order.
   - `String.valueOf(...)` formats each value on every `generate()` call, so a
     value that changes between calls shows its current text.
+- `sampleWindow(Duration)`
+  - Sets how long `generate()` samples the JVM. The default is one second, and
+    zero skips sampling. See [The sampling window](#the-sampling-window).
+- `allFrames(boolean)`
+  - When true, the thread list prints every stack frame. The default is false,
+    which hides plumbing frames. See [The frame filter](#the-frame-filter).
 
 ```java
 import java.util.Arrays;
@@ -71,6 +80,22 @@ String out = dump.generate();
 
 A `JvmThreadDump` is immutable and safe to share between threads. The builder
 copies the list and the map, so later changes to them leave the dump unchanged.
+`generate()` blocks for the sampling window, one second by default.
+`sampleWindow(Duration.ZERO)` makes it return at once.
+
+`toBuilder()` returns a builder that holds a dump's main arguments, custom
+values, window, and frame setting. Use it to build a one-off variant without
+repeating the settings:
+
+```java
+import java.time.Duration;
+
+String detailed = dump.toBuilder()
+        .sampleWindow(Duration.ofSeconds(5))
+        .allFrames(true)
+        .build()
+        .generate();
+```
 
 To serve a customized dump, extend `ThreadDumpServlet` and pass the built dump
 to its constructor. The servlet regenerates the dump on every request.
@@ -123,13 +148,170 @@ public class ThreadDumpRegistration implements ServletContextListener
 }
 ```
 
+## Findings
+
+The dump opens with a `Findings` block. Nine checks read the JVM, and the block
+lists what looks abnormal, most serious first, with the evidence to act on: the
+thread names, the lock, the holder, the pool, and the frame a thread is stuck
+at. Each raw line a finding refers to ends with ` <<< ` and the finding's title,
+so the eye lands on it.
+
+```text
+              Findings: 3 of 9 checks flagged something (sampled over 1.0s)
+
+              Deadlock: 2 threads block each other and will never proceed
+                        "worker-3" (0x1f) waits for Lock@5e2a, held by "worker-7"
+                            com.widen.orders.Ledger.post(Ledger.java:88)
+                        "worker-7" (0x2a) waits for Lock@1b9c, held by "worker-3"
+                            com.widen.orders.Inventory.reserve(Inventory.java:41)
+                        12 other threads wait behind them
+
+          Lock Pile-up: 43 threads wait on a lock held by "qtp-exec-12" (0x51, RUNNABLE)
+                            sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:346)
+                            com.widen.search.SolrClient.query(SolrClient.java:210)
+
+             Heap Full: G1 Old Gen holds 97% of its max, 96% after its last collection
+                        Top allocators: "import-7" (0x33) 412 MB/s
+                                        "qtp-exec-4" (0x49) 96 MB/s
+
+          Current Time: 11/20/2026 09:30:00 CST
+```
+
+When no check flags anything, the block is one line:
+
+```text
+              Findings: None (9 checks, sampled over 1.0s)
+```
+
+`None` means the checks flagged nothing. It does not mean the JVM is healthy:
+the checks look for a fixed set of problems at fixed thresholds. The count
+covers the checks that ran. A check whose data is unavailable, such as
+`CPU Saturated` when the JVM reports no CPU load, does not run and does not
+count.
+
+### The checks
+
+| Check | Needs a window | Flags when |
+| --- | --- | --- |
+| Deadlock | no | The JVM reports deadlocked threads. Each cycle of threads that wait on each other is one finding, with the number of other threads that wait behind it. |
+| Lock Pile-up | no | 5 or more threads wait on locks that lead back to one holder. |
+| Stack Pile-up | no | 10 or more threads that are not idle are stuck in the same call. |
+| Heap Full | no | An old-generation heap pool holds 90% or more of its max now and held 90% or more after its last collection. |
+| Metadata Full | no | `Metaspace`, `Compressed Class Space`, `Code Cache`, or a `CodeHeap` pool holds 90% or more of a defined max. |
+| GC Overhead | uses one | Garbage collection took 25% or more of the window and at least 500 ms, or 10% or more of JVM uptime. |
+| CPU Saturated | uses one | The system CPU load is 0.90 or higher. |
+| File Descriptors | no | The open file descriptors are 90% or more of the limit. |
+| Hot Threads | yes | A thread used 50% or more of one core during the window. |
+
+Notes on the checks:
+
+- **Waiting on a lock.** A thread waits on a lock when another thread holds the
+  lock and the thread is `BLOCKED`, or is parked for a lock such as a
+  `ReentrantLock`. A thread inside `Object.wait()` waits for a notify, not for a
+  lock, and does not count. A thread in or behind a deadlock belongs to
+  `Deadlock` and stays out of `Lock Pile-up` and `Stack Pile-up`.
+- **Stack Pile-up** groups threads by the top frame of the stack and the first
+  frame outside the JDK that the frame filter keeps, so it names the library a
+  thread is stuck in, such as a drained connection pool. Idle threads, such as a
+  `WAITING` server worker with no application code on its stack, stay out of the
+  count. The finding prints the count, the count per thread state, the two
+  frames, and the first three thread names. It marks no lines.
+- **Heap Full** needs both readings at 90%. The current usage includes garbage,
+  so a healthy Parallel or Serial old generation passes 90% before every full
+  collection. The usage after the last collection can be hours old. A pool with
+  no after-collection reading, or no defined max, is not flagged.
+- **GC Overhead** leaves out collectors that report concurrent work instead of
+  pauses (names that contain `Cycles` or `Concurrent`). The lifetime measure is
+  an average since the JVM started, and runs with or without a window.
+- **Hot Threads** lists up to five threads, highest first, with the top three
+  frames of each stack. A thread that started during the window counts its
+  whole CPU time as the window's.
+- **Top allocators** under `Heap Full` and `GC Overhead` list up to three
+  threads that allocated 1 MB per second or more during the window. They appear
+  only when the JVM supports per-thread allocation figures.
+
+### The sampling window
+
+Some checks report what the JVM is doing now, not its lifetime average: which
+threads use CPU, which allocate memory, and how much time garbage collection
+takes. To measure that, `generate()` reads per-thread CPU time, allocated bytes,
+and collector totals, waits for the window, reads them again, and reports the
+difference. The wait makes every dump take one window longer.
+
+- The default window is one second. `generate()` blocks for that time.
+- `Builder.sampleWindow(Duration)` sets another window. It throws
+  `NullPointerException` for null and `IllegalArgumentException` for a negative
+  duration. It has no upper limit.
+- `sampleWindow(Duration.ZERO)` skips the wait, so `generate()` returns at once.
+  The header then says `not sampled` in place of `sampled over 1.0s`, and
+  `Hot Threads`, the one check that needs a window, does not run and does not
+  count: `Findings: None (8 checks, not sampled)`.
+- If another thread interrupts the caller during the window, `generate()` stops
+  waiting, sets the interrupt flag again, and finishes the dump with the time
+  that passed.
+- `ThreadDumpServlet` takes the window from a request parameter, a whole number
+  of seconds from 0 to 30: `/td?window=5` samples for five seconds, and
+  `/td?window=0` returns at once. Any other value gets status 400 with the body
+  `window must be a whole number of seconds from 0 to 30`. The limit keeps a
+  request thread from sleeping longer than a typical proxy timeout.
+
+CPU load has two caveats. `getSystemCpuLoad()` reports the load since the
+previous call by any caller in the JVM. With a window, the dump reads it at the
+window's start and again at its end, so the figure covers the window, or less
+when another caller, such as a metrics scrape or a second dump, reads the load
+during the window. With a zero window, the `CPU Saturated` check and the
+`CPU Load` line use one reading, which covers the time since the previous
+caller. In a container with a CPU limit, the JVM reports use of that limit
+instead of the host's load, so 0.90 means the container is close to being
+throttled.
+
+### The frame filter
+
+Most frames in a stack are plumbing. The thread list hides them, so the
+application's own calls stand out. A frame is hidden when its class matches one
+of these rules:
+
+| Kind | Classes |
+| --- | --- |
+| Reflection and method handles | `sun.reflect.`, `jdk.internal.reflect.`, `java.lang.reflect.`, `java.lang.invoke.` |
+| Generated proxies | a class with no package whose name starts with `$` (a Tapestry service proxy or its advice invocation), `com.sun.proxy.`, `jdk.proxy`, and any class whose name contains `$$` (CGLIB, Javassist, Hibernate proxies, and lambda classes) |
+| Tapestry | everything under `org.apache.tapestry5.` |
+| Server dispatch | `org.eclipse.jetty.`, `org.glassfish.jersey.`, `org.glassfish.hk2.`, `org.jvnet.hk2.`, `javax.servlet.` |
+
+The top frame of a stack always prints, whatever its class, because it says what
+the thread is doing now. One line after the last frame gives the number of
+hidden frames, and the line is left out when none are hidden:
+
+```text
+"qtp-exec-12" priority=5 id=0x51 group=main cpu=412ms block_cnt=0 wait_cnt=3 RUNNABLE
+    sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:346)
+    org.postgresql.jdbc.PgPreparedStatement.executeQuery(PgPreparedStatement.java:134)
+    com.widen.assets.AssetDao.find(AssetDao.java:88)
+    com.widen.api.AssetResource.get(AssetResource.java:57)
+    java.lang.Thread.run(Thread.java:840)
+    ... 47 frames hidden
+```
+
+- `Builder.allFrames(true)` prints every frame in the thread list, with no count
+  line. `/td?frames=all` does the same for one servlet request. Any other value
+  of `frames` gets status 400 with the body `frames must be all`.
+- The frames a finding prints as evidence are always filtered, so the same JVM
+  state gives the same findings whatever the setting.
+- The rules are fixed. A consumer cannot add its own.
+
 ## Glossary
 
 - `Hostname`: `System.getenv('HOSTNAME')`
+- `File Descriptors`: The open count and the limit, from the JVM's Unix
+  operating system bean. `Not Available` where the JVM has no such bean, such as
+  on Windows.
 - `CPU Load`:
   [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
   [JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)
 - `System Uptime`: Linux only; parsed from file `/proc/uptime`
+- `Deadlocked Threads`: The threads in the deadlock cycles, each by name and
+  id. `None` when the JVM reports no deadlock.
+- `Thread Count`: The number of live threads, then the count per state.
 - `Main Arguments`: Empty unless the builder sets `mainArguments`.
 - `JVM System Props`: The `-D` values print as `****` when the key contains
   `password`, `pass`, `pwd`, `secret`, `token`, `credential`, or `key`, when the
@@ -139,108 +321,86 @@ public class ThreadDumpRegistration implements ServletContextListener
 ## Example Output
 
 ```text
-          Current Time: 01/30/2019 11:18:17 CST
+              Findings: None (9 checks, sampled over 1.0s)
+
+          Current Time: 11/20/2026 12:11:21 CST
      Default Time Zone: Central Standard Time (America/Chicago)
-          Java Version: 1.8.0_191-b12 (Oracle Corporation)
-               Java VM: 25.191-b12 (mixed mode)
-             Java Home: /Library/Java/JavaVirtualMachines/jdk1.8.0_191.jdk/Contents/Home/jre
-     Working Directory: /Users/uriah/dev/github/jvm-threaddump/generator
-        Temp Directory: /var/folders/ws/ydsf0xgn6mn849zk7rp25fgxl7sq5r/T/
+          Java Version: 17.0.14+7 (Eclipse Adoptium)
+               Java VM: 17.0.14+7 (mixed mode, sharing)
+             Java Home: /Users/uriah/.gradle/jdks/eclipse_adoptium-17-aarch64-os_x.2/jdk-17.0.14+7/Contents/Home
+     Working Directory: /Users/uriah/dev/jvm-threaddump/generator
+        Temp Directory: /var/folders/81/glyvgg9j0z54gwv06_7tcpr80000gp/T/
 
         Main Arguments:
       Default Encoding: UTF-8
       JVM System Props: file.encoding=UTF-8
-                        idea.test.cyclic.buffer.size=1048576
+                        user.country=US
+                        user.language=en
+                        user.variant
 
               Hostname: Not Available
-      Operating System: Mac OS X (10.14.2)
-     System Processors: 12 x86_64
-         System Memory: 2,017 MB available; 32,768 MB total
-              CPU Load: 0.0000 system; 0.0000 jvm (0.0 to 1.0)
+      Operating System: Mac OS X (27.2)
+     System Processors: 10 aarch64
+         System Memory: 1,973 MB available; 65,536 MB total
+      File Descriptors: 62 open; 1,048,576 limit
+              CPU Load: 0.5499 system; 0.0078 jvm (0.0 to 1.0)
          System Uptime: Not Available
       System Idle Time: Not Available
-            JVM Uptime: 0 days, 0:00:00
+            JVM Uptime: 0 days, 0:00:01
           JVM CPU Time: 0 days, 0:00:00
 
-       JVM Free Memory: 232 MB (of committed)
-      JVM Maximum Heap: 245 MB
-       JVM Memory Args: -Xmx256m
+       JVM Free Memory: 496 MB (of committed)
+      JVM Maximum Heap: 512 MB
+       JVM Memory Args: -Xmx512m
 
                 Memory: used/committed, used/max
-                  Heap: 5%/5%         init=256 MB      used=12 MB       commit=245 MB      max=245 MB
-              Non Heap: 93%/0%        init=2 MB        used=9 MB        commit=10 MB       max=-1 bytes
+                  Heap: 3%/3%         init=512 MB      used=14 MB       commit=512 MB      max=512 MB
+              Non Heap: 82%/0%        init=7 MB        used=15 MB       commit=19 MB       max=-1 bytes
 
              Collector: used/committed, used/max
-         PS Eden Space: 20%/20%       init=64 MB       used=12 MB       commit=64 MB       max=64 MB
-     PS Survivor Space: 0%/0%         init=10 MB       used=0 bytes     commit=10 MB       max=10 MB
-            PS Old Gen: 0%/0%         init=171 MB      used=0 bytes     commit=171 MB      max=171 MB
-            Code Cache: 88%/1%        init=2 MB        used=2 MB        commit=2 MB        max=240 MB
-Compressed Class Space: 81%/0%        init=0 bytes     used=827 KB      commit=1 MB        max=1,024 MB
-             Metaspace: 96%/0%        init=0 bytes     used=6 MB        commit=7 MB        max=-1 bytes
+         G1 Eden Space: 17%/0%        init=27 MB       used=8 MB        commit=48 MB       max=-1 bytes
+     G1 Survivor Space: 95%/0%        init=0 bytes     used=3 MB        commit=4 MB        max=-1 bytes
+            G1 Old Gen: 0%/0%         init=485 MB      used=1 MB        commit=460 MB      max=512 MB
+Compressed Class Space: 91%/0%        init=0 bytes     used=1 MB        commit=1 MB        max=1,024 MB
+             Metaspace: 97%/0%        init=0 bytes     used=9 MB        commit=9 MB        max=-1 bytes
 
-        GC PS Scavenge: spent 0:00:00.000 doing 0 collections
-       GC PS MarkSweep: spent 0:00:00.000 doing 0 collections
+GC G1 Young Generation: spent 0:00:00.001 doing 1 collections
+  GC G1 Old Generation: spent 0:00:00.000 doing 0 collections
 
     Deadlocked Threads: None
-          Thread Count: 5
+          Thread Count: 9 (5 RUNNABLE, 3 WAITING, 1 TIMED_WAITING)
 
-"Finalizer" daemon priority=8 id=0x3 group=system cpu=0ms block_cnt=1 wait_cnt=2 WAITING
+"Finalizer" daemon priority=8 id=0x3 group=system cpu=0ms block_cnt=1 wait_cnt=2 WAITING (waiting for java.lang.ref.ReferenceQueue$Lock@59e505b2)
     java.lang.Object.wait(Object.java)
-    java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:144)
-    java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:165)
-    java.lang.ref.Finalizer$FinalizerThread.run(Finalizer.java:216)
+    java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:155)
+    java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:176)
+    java.lang.ref.Finalizer$FinalizerThread.run(Finalizer.java:172)
 
-"Test worker" priority=5 id=0x1 group=main cpu=405ms block_cnt=0 wait_cnt=0 RUNNABLE
-    sun.management.ThreadImpl.dumpThreads0(Native Method)
-    sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:454)
-    com.widen.util.td.ThreadSection.lines(ThreadSection.java:38)
-    com.widen.util.td.JvmThreadDump.generate(JvmThreadDump.java:53)
-    com.widen.util.td.TestDump.printsEverySectionOfTheRunningJvm(TestDump.java:12)
-    sun.reflect.NativeMethodAccessorImpl.invoke0(NativeMethodAccessorImpl.java)
-    sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
-    sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
-    java.lang.reflect.Method.invoke(Method.java:498)
-    org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:50)
-    org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
-    org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:47)
-    org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
-    org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:325)
-    org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:78)
-    org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:57)
-    org.junit.runners.ParentRunner$3.run(ParentRunner.java:290)
-    org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:71)
-    org.junit.runners.ParentRunner.runChildren(ParentRunner.java:288)
-    org.junit.runners.ParentRunner.access$000(ParentRunner.java:58)
-    org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:268)
-    org.junit.runners.ParentRunner.run(ParentRunner.java:363)
-    org.junit.runner.JUnitCore.run(JUnitCore.java:137)
-    com.intellij.junit4.JUnit4IdeaTestRunner.startRunnerWithArgs(JUnit4IdeaTestRunner.java:68)
-    com.intellij.rt.execution.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:47)
-    com.intellij.rt.execution.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:242)
-    com.intellij.rt.execution.junit.JUnitStarter.main(JUnitStarter.java:70)
-
-"Monitor Ctrl-Break" daemon priority=5 id=0x5 group=main cpu=22ms block_cnt=0 wait_cnt=0 RUNNABLE
-    java.net.SocketInputStream.socketRead0(SocketInputStream.java)
-    java.net.SocketInputStream.socketRead(SocketInputStream.java:116)
-    java.net.SocketInputStream.read(SocketInputStream.java:171)
-    java.net.SocketInputStream.read(SocketInputStream.java:141)
-    sun.nio.cs.StreamDecoder.readBytes(StreamDecoder.java:284)
-    sun.nio.cs.StreamDecoder.implRead(StreamDecoder.java:326)
-    sun.nio.cs.StreamDecoder.read(StreamDecoder.java:178)
-    java.io.InputStreamReader.read(InputStreamReader.java:184)
-    java.io.BufferedReader.fill(BufferedReader.java:161)
-    java.io.BufferedReader.readLine(BufferedReader.java:324)
-    java.io.BufferedReader.readLine(BufferedReader.java:389)
-    com.intellij.rt.execution.application.AppMainV2$1.run(AppMainV2.java:64)
-
-"Reference Handler" daemon priority=10 id=0x2 group=system cpu=0ms block_cnt=1 wait_cnt=1 WAITING
-    java.lang.Object.wait(Object.java)
-    java.lang.Object.wait(Object.java:502)
-    java.lang.ref.Reference.tryHandlePending(Reference.java:191)
-    java.lang.ref.Reference$ReferenceHandler.run(Reference.java:153)
+"Reference Handler" daemon priority=10 id=0x2 group=system cpu=0ms block_cnt=1 wait_cnt=0 RUNNABLE
+    java.lang.ref.Reference.waitForReferencePendingList(Reference.java)
+    java.lang.ref.Reference.processPendingReferences(Reference.java:253)
+    java.lang.ref.Reference$ReferenceHandler.run(Reference.java:215)
 
 "Signal Dispatcher" daemon priority=9 id=0x4 group=system cpu=0ms block_cnt=0 wait_cnt=0 RUNNABLE
+
+"Test worker" priority=5 id=0x1 group=main cpu=309ms block_cnt=1 wait_cnt=2 RUNNABLE
+    sun.management.ThreadImpl.dumpThreads0(ThreadImpl.java)
+    sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:528)
+    sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:516)
+    com.widen.util.td.JvmSnapshot.read(JvmSnapshot.java:106)
+    com.widen.util.td.JvmThreadDump.generate(JvmThreadDump.java:76)
+    com.widen.util.td.TestDump.printsEverySectionOfTheRunningJvm(TestDump.java:15)
+    org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:786)
+    org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:514)
+    org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60)
+    ...
+    worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74)
+    ... 26 frames hidden
 ```
+
+This output is trimmed. It leaves out three `CodeHeap` pools, five of the nine
+threads, and most of the `Test worker` stack, which the lone `...` stands for.
+The hidden-frame count is the real one.
 
 ## Build
 

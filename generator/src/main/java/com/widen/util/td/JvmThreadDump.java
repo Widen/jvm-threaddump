@@ -21,11 +21,14 @@ public final class JvmThreadDump
     private final JvmSources jvm;
     private final List<String> mainArguments;
     private final Map<String, ?> customValues;
+    private final Duration sampleWindow;
 
-    private JvmThreadDump(JvmSources jvm, List<String> mainArguments, Map<String, ?> customValues) {
+    private JvmThreadDump(JvmSources jvm, List<String> mainArguments, Map<String, ?> customValues,
+            Duration sampleWindow) {
         this.jvm = jvm;
         this.mainArguments = mainArguments;
         this.customValues = customValues;
+        this.sampleWindow = sampleWindow;
     }
 
     /**
@@ -43,10 +46,27 @@ public final class JvmThreadDump
     }
 
     /**
-     * Reads the JVM now and returns the report.
+     * Returns a builder holding this dump's settings, to make a changed copy.
+     */
+    public Builder toBuilder() {
+        return new Builder()
+                .jvmSources(jvm)
+                .mainArguments(mainArguments)
+                .customValues(customValues)
+                .sampleWindow(sampleWindow);
+    }
+
+    Duration sampleWindow() {
+        return sampleWindow;
+    }
+
+    /**
+     * Reads the JVM and returns the report. The call blocks for the sample window, one second by default, to measure
+     * what the threads and collectors do meanwhile. An interrupt ends the wait early and leaves the thread's interrupt
+     * flag set.
      */
     public String generate() {
-        JvmSnapshot snapshot = JvmSnapshot.read(jvm, Duration.ZERO);
+        JvmSnapshot snapshot = JvmSnapshot.read(jvm, sampleWindow);
         List<Line> lines = new ArrayList<>();
         lines.addAll(new JvmInfoSection(jvm, snapshot, mainArguments, customValues).lines());
         lines.addAll(new MemorySection(jvm, snapshot).lines());
@@ -65,6 +85,7 @@ public final class JvmThreadDump
         private JvmSources jvm = JvmSources.platform();
         private List<String> mainArguments = Collections.emptyList();
         private Map<String, ?> customValues = Collections.emptyMap();
+        private Duration sampleWindow = Duration.ofSeconds(1);
 
         private Builder() {
         }
@@ -91,6 +112,22 @@ public final class JvmThreadDump
             return this;
         }
 
+        /**
+         * Sets how long {@link JvmThreadDump#generate()} waits between its two readings of CPU time, allocation, and
+         * garbage collection. Zero skips the wait and the figures that depend on it. The default is one second.
+         *
+         * @throws NullPointerException if the window is null
+         * @throws IllegalArgumentException if the window is negative
+         */
+        public Builder sampleWindow(Duration sampleWindow) {
+            Objects.requireNonNull(sampleWindow, "sampleWindow");
+            if (sampleWindow.isNegative()) {
+                throw new IllegalArgumentException("sampleWindow must not be negative: " + sampleWindow);
+            }
+            this.sampleWindow = sampleWindow;
+            return this;
+        }
+
         Builder jvmSources(JvmSources jvm) {
             this.jvm = Objects.requireNonNull(jvm, "jvm");
             return this;
@@ -104,7 +141,8 @@ public final class JvmThreadDump
             return new JvmThreadDump(
                     jvm,
                     Collections.unmodifiableList(new ArrayList<>(mainArguments)),
-                    Collections.unmodifiableMap(new LinkedHashMap<>(customValues)));
+                    Collections.unmodifiableMap(new LinkedHashMap<>(customValues)),
+                    sampleWindow);
         }
 
     }

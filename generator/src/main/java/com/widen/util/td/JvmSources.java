@@ -7,6 +7,7 @@ import java.lang.management.OperatingSystemMXBean;
 import java.lang.management.RuntimeMXBean;
 import java.lang.management.ThreadMXBean;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -63,6 +64,18 @@ interface JvmSources
      * @return the keys of {@link Thread#getAllStackTraces()}
      */
     Set<Thread> liveThreads();
+
+    /**
+     * Blocks the calling thread for the duration.
+     *
+     * @throws InterruptedException if the thread is interrupted while waiting
+     */
+    void pause(Duration duration) throws InterruptedException;
+
+    /**
+     * @return a monotonic reading in nanoseconds, as {@link System#nanoTime()} gives
+     */
+    long nanoTime();
 
     static JvmSources platform() {
         return new PlatformJvmSources();

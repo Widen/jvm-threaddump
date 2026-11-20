@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -92,5 +93,15 @@ final class PlatformJvmSources implements JvmSources
     @Override
     public Set<Thread> liveThreads() {
         return Thread.getAllStackTraces().keySet();
+    }
+
+    @Override
+    public void pause(Duration duration) throws InterruptedException {
+        Thread.sleep(duration.toMillis(), duration.getNano() % 1_000_000);
+    }
+
+    @Override
+    public long nanoTime() {
+        return System.nanoTime();
     }
 }

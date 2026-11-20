@@ -132,6 +132,21 @@ public class TestThreadDumpServlet
         verify(response).setHeader("X-Robots-Tag", "noindex, nofollow");
     }
 
+    @Test
+    void letsAFailureInsideGenerateEscapeInsteadOfAnswering400() {
+        JvmSources failing = mock(JvmSources.class, invocation -> {
+            throw new IllegalArgumentException("internal defect");
+        });
+        ThreadDumpServlet servlet = new ThreadDumpServlet(
+                JvmThreadDump.builder().jvmSources(failing).sampleWindow(Duration.ZERO).build());
+        HttpServletResponse response = mock(HttpServletResponse.class);
+
+        assertThatThrownBy(() -> servlet.doGet(requestWith(null, null), response))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("internal defect");
+        verify(response, never()).setStatus(400);
+    }
+
     private static JvmThreadDump zeroWindowDump() {
         return JvmThreadDump.builder().sampleWindow(Duration.ZERO).build();
     }

@@ -40,13 +40,18 @@ public class ThreadDumpServlet extends HttpServlet
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String text;
+        JvmThreadDump requested;
         try {
-            text = forRequest(dump, req.getParameter("window"), req.getParameter("frames")).generate();
+            requested = forRequest(dump, req.getParameter("window"), req.getParameter("frames"));
         } catch (IllegalArgumentException e) {
             resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            text = e.getMessage();
+            respond(resp, e.getMessage());
+            return;
         }
+        respond(resp, requested.generate());
+    }
+
+    private static void respond(HttpServletResponse resp, String text) throws IOException {
         byte[] body = text.getBytes(StandardCharsets.UTF_8);
 
         resp.setContentType("text/plain; charset=UTF-8");

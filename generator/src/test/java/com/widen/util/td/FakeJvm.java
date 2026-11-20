@@ -147,8 +147,25 @@ final class FakeJvm implements JvmSources
         return collector;
     }
 
+    /** Makes the thread bean report per-thread allocation. */
+    void enableAllocation() {
+        when(threads.isThreadAllocatedMemorySupported()).thenReturn(true);
+        when(threads.isThreadAllocatedMemoryEnabled()).thenReturn(true);
+    }
+
+    /** Adds a thread that allocates {@code bytes} between the start and the end of a sampling window. */
+    ThreadInfo addAllocatingThread(String name, long id, long bytes) {
+        ThreadInfo info = addThread(name, id, Thread.State.RUNNABLE);
+        when(threads.getThreadAllocatedBytes(id)).thenReturn(0L, bytes);
+        return info;
+    }
+
     JvmSnapshot snapshot() {
-        return JvmSnapshot.read(this, Duration.ZERO);
+        return snapshot(Duration.ZERO);
+    }
+
+    JvmSnapshot snapshot(Duration window) {
+        return JvmSnapshot.read(this, window);
     }
 
     @Override

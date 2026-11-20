@@ -88,6 +88,18 @@ public class TestJvmInfoSection
                         titled("JVM CPU Time", "Not Available"));
     }
 
+    @Test
+    void printsNotAvailableForUndefinedJvmTimes() {
+        FakeJvm jvm = new FakeJvm();
+        when(jvm.runtime.getUptime()).thenReturn(-1L);
+        when(((com.sun.management.OperatingSystemMXBean) jvm.operatingSystem).getProcessCpuTime()).thenReturn(-1L);
+
+        assertThat(TestText.render(new JvmInfoSection(jvm, emptyList(), emptyMap()).lines()))
+                .contains(
+                        titled("JVM Uptime", "Not Available"),
+                        titled("JVM CPU Time", "Not Available"));
+    }
+
     @ParameterizedTest
     @CsvSource(delimiter = '|', value = {
             "db.password=hunter2|db.password=****",

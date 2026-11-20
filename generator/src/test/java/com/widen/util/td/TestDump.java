@@ -12,6 +12,7 @@ public class TestDump
     @Test
     void printsEverySectionOfTheRunningJvm() {
         assertThat(JvmThreadDump.builder().sampleWindow(Duration.ZERO).build().generate())
+                .contains("Findings: ")
                 .contains("Current Time: ")
                 .contains("JVM Free Memory: ")
                 .contains("Memory: used/committed, used/max")

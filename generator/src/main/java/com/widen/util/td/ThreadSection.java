@@ -20,10 +20,12 @@ import static java.lang.String.format;
 final class ThreadSection
 {
     private final JvmSnapshot snapshot;
+    private final Findings findings;
     private final boolean allFrames;
 
-    ThreadSection(JvmSnapshot snapshot, boolean allFrames) {
+    ThreadSection(JvmSnapshot snapshot, Findings findings, boolean allFrames) {
         this.snapshot = snapshot;
+        this.findings = findings;
         this.allFrames = allFrames;
     }
 
@@ -36,7 +38,7 @@ final class ThreadSection
         lines.add(new TitledLine("Thread Count", count));
         lines.add(new BlankLine());
         for (ThreadSnapshot thread : snapshot.threads) {
-            lines.add(new SimpleLine(formatHeader(thread)));
+            lines.add(new SimpleLine(formatHeader(thread) + findings.marker(Finding.threadMark(thread.id()))));
             StackTraceElement[] stack = thread.stack();
             List<StackTraceElement> shown = allFrames ? Arrays.asList(stack) : StackFilter.kept(stack);
             for (StackTraceElement frame : shown) {

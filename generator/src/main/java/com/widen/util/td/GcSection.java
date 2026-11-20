@@ -15,15 +15,19 @@ final class GcSection
 {
     private final JvmSnapshot snapshot;
 
-    GcSection(JvmSnapshot snapshot) {
+    private final Findings findings;
+
+    GcSection(JvmSnapshot snapshot, Findings findings) {
         this.snapshot = snapshot;
+        this.findings = findings;
     }
 
     List<Line> lines() {
         List<Line> lines = new ArrayList<>();
         for (GcSnapshot gc : snapshot.collectors) {
             lines.add(new TitledLine("GC " + gc.name, format(Locale.US, "spent %s doing %d collections",
-                    Durations.hoursMinutesSecondsMillis(gc.timeMillis), gc.count)));
+                    Durations.hoursMinutesSecondsMillis(gc.timeMillis), gc.count)
+                    + findings.marker(Finding.gcMark(gc.name))));
         }
         lines.add(new BlankLine());
         return lines;

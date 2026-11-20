@@ -56,13 +56,23 @@ public class TestJvmInfoSection
     }
 
     @Test
+    void marksTheCpuLoadLine() {
+        FakeJvm jvm = new FakeJvm();
+        JvmSnapshot snapshot = jvm.snapshot();
+        Findings findings = StubCheck.findingsOf(snapshot, StubCheck.finding("Alpha", Finding.lineMark("CPU Load")));
+
+        assertThat(TestText.render(new JvmInfoSection(jvm, snapshot, findings, emptyList(), emptyMap()).lines()))
+                .contains(titled("CPU Load", "0.2500 system; 0.1250 jvm (0.0 to 1.0) <<< Alpha"));
+    }
+
+    @Test
     void printsCustomValuesAndMainArgumentsInOrder() {
         Map<String, Object> custom = new LinkedHashMap<>();
         custom.put("App", "cheese");
         custom.put("Build", 42);
 
         FakeJvm jvm = new FakeJvm();
-        assertThat(TestText.render(new JvmInfoSection(jvm, jvm.snapshot(), Arrays.asList("--port", "8080"), custom).lines()))
+        assertThat(TestText.render(new JvmInfoSection(jvm, jvm.snapshot(), Findings.NONE, Arrays.asList("--port", "8080"), custom).lines()))
                 .containsSubsequence(
                         titled("Temp Directory", "/tmp"),
                         "",
@@ -163,6 +173,6 @@ public class TestJvmInfoSection
     }
 
     private static List<Line> lines(FakeJvm jvm) {
-        return new JvmInfoSection(jvm, jvm.snapshot(), emptyList(), emptyMap()).lines();
+        return new JvmInfoSection(jvm, jvm.snapshot(), Findings.NONE, emptyList(), emptyMap()).lines();
     }
 }

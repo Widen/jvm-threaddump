@@ -48,7 +48,7 @@ public class TestMemorySection
         jvm.addPool("G1 Eden Space", MemoryType.HEAP, POOL_USAGE, null);
         jvm.addPool("G1 Survivor Space", MemoryType.HEAP, null, null);
 
-        assertThat(TestText.render(new MemorySection(jvm, jvm.snapshot()).lines()))
+        assertThat(TestText.render(new MemorySection(jvm, jvm.snapshot(), Findings.NONE).lines()))
                 .containsExactly(
                         titled("JVM Free Memory", "100 MB (of committed)"),
                         titled("JVM Maximum Heap", "512 MB"),
@@ -65,6 +65,17 @@ public class TestMemorySection
                         titled("Another Pool*", usage),
                         titled("Some Pool*", usage),
                         "");
+    }
+
+    @Test
+    void marksAPoolLine() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addPool("G1 Old Gen", MemoryType.HEAP, POOL_USAGE, null);
+        JvmSnapshot snapshot = jvm.snapshot();
+        Findings findings = StubCheck.findingsOf(snapshot, StubCheck.finding("Alpha", Finding.poolMark("G1 Old Gen")));
+
+        assertThat(TestText.render(new MemorySection(jvm, snapshot, findings).lines()))
+                .contains(titled("G1 Old Gen", MemorySection.formatUsage(POOL_USAGE) + " <<< Alpha"));
     }
 
     static Stream<Arguments> printsKnownPoolsInCollectorOrder() {
@@ -91,7 +102,7 @@ public class TestMemorySection
             jvm.addPool(name, MemoryType.HEAP, POOL_USAGE, null);
         }
 
-        List<String> lines = TestText.render(new MemorySection(jvm, jvm.snapshot()).lines());
+        List<String> lines = TestText.render(new MemorySection(jvm, jvm.snapshot(), Findings.NONE).lines());
         List<String> poolLines = lines.subList(lines.indexOf(titled("Collector", "used/committed, used/max")) + 1,
                 lines.size() - 1);
         List<String> titles = new ArrayList<>();
@@ -106,7 +117,7 @@ public class TestMemorySection
         FakeJvm jvm = new FakeJvm();
         jvm.maxMemory = Long.MAX_VALUE;
 
-        assertThat(TestText.render(new MemorySection(jvm, jvm.snapshot()).lines()))
+        assertThat(TestText.render(new MemorySection(jvm, jvm.snapshot(), Findings.NONE).lines()))
                 .contains(titled("JVM Maximum Heap", "unlimited"));
     }
 }

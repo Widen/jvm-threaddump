@@ -27,13 +27,15 @@ public class TestJvmThreadDump
         FakeJvm jvm = new FakeJvm();
         List<Line> lines = new ArrayList<>();
         JvmSnapshot snapshot = jvm.snapshot();
-        lines.addAll(new JvmInfoSection(jvm, snapshot, emptyList(), emptyMap()).lines());
-        lines.addAll(new MemorySection(jvm, snapshot).lines());
-        lines.addAll(new GcSection(snapshot).lines());
+        Findings findings = Findings.run(snapshot, Checks.ALL);
+        lines.addAll(new FindingsSection(findings, snapshot).lines());
+        lines.addAll(new JvmInfoSection(jvm, snapshot, findings, emptyList(), emptyMap()).lines());
+        lines.addAll(new MemorySection(jvm, snapshot, findings).lines());
+        lines.addAll(new GcSection(snapshot, findings).lines());
         lines.addAll(new DeadlockSection(snapshot).lines());
-        lines.addAll(new ThreadSection(snapshot, false).lines());
+        lines.addAll(new ThreadSection(snapshot, findings, false).lines());
 
-        assertThat(JvmThreadDump.builder().jvmSources(jvm).build().generate())
+        assertThat(JvmThreadDump.builder().jvmSources(jvm).sampleWindow(Duration.ZERO).build().generate())
                 .isEqualTo(Line.render(lines));
     }
 
@@ -134,7 +136,8 @@ public class TestJvmThreadDump
                 .doesNotContain("java.lang.reflect.Method.invoke");
         assertThat(builder.allFrames(true).build().generate())
                 .contains("java.lang.reflect.Method.invoke")
-                .doesNotContain("hidden");
+                .doesNotContain("frame hidden")
+                .doesNotContain("frames hidden");
     }
 
     @Test

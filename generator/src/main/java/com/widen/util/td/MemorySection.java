@@ -39,9 +39,12 @@ final class MemorySection
     private final JvmSources jvm;
     private final JvmSnapshot snapshot;
 
-    MemorySection(JvmSources jvm, JvmSnapshot snapshot) {
+    private final Findings findings;
+
+    MemorySection(JvmSources jvm, JvmSnapshot snapshot, Findings findings) {
         this.jvm = jvm;
         this.snapshot = snapshot;
+        this.findings = findings;
     }
 
     List<Line> lines() {
@@ -68,10 +71,11 @@ final class MemorySection
         for (String name : POOL_ORDER) {
             MemoryUsage usage = pools.remove(name);
             if (usage != null) {
-                lines.add(new TitledLine(name, formatUsage(usage)));
+                lines.add(new TitledLine(name, formatUsage(usage) + findings.marker(Finding.poolMark(name))));
             }
         }
-        pools.forEach((name, usage) -> lines.add(new TitledLine(name + "*", formatUsage(usage))));
+        pools.forEach((name, usage) -> lines.add(
+                new TitledLine(name + "*", formatUsage(usage) + findings.marker(Finding.poolMark(name)))));
         lines.add(new BlankLine());
         return lines;
     }

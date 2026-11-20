@@ -21,19 +21,38 @@ final class LockGraph
     private final List<List<ThreadSnapshot>> behindCycles;
     private final Set<Long> inOrBehindCycles;
     private final Map<Long, List<ThreadSnapshot>> waitersByHolder;
+    private final List<List<ThreadSnapshot>> deadlockCycles;
+    private final List<Long> deadlockedIds;
 
     private LockGraph(List<List<ThreadSnapshot>> cycles, List<List<ThreadSnapshot>> behindCycles,
-            Set<Long> inOrBehindCycles, Map<Long, List<ThreadSnapshot>> waitersByHolder) {
+            Set<Long> inOrBehindCycles, Map<Long, List<ThreadSnapshot>> waitersByHolder, long[] jvmDeadlockedIds) {
         this.cycles = cycles;
         this.behindCycles = behindCycles;
         this.inOrBehindCycles = inOrBehindCycles;
         this.waitersByHolder = waitersByHolder;
+
+        boolean trustCycles = jvmDeadlockedIds.length > 0 && !cycles.isEmpty();
+        this.deadlockCycles = trustCycles ? cycles : Collections.<List<ThreadSnapshot>>emptyList();
+        List<Long> deadlockedIds = new ArrayList<>();
+        if (trustCycles) {
+            for (List<ThreadSnapshot> cycle : cycles) {
+                for (ThreadSnapshot thread : cycle) {
+                    deadlockedIds.add(thread.id());
+                }
+            }
+        } else {
+            for (long id : jvmDeadlockedIds) {
+                deadlockedIds.add(id);
+            }
+        }
+        this.deadlockedIds = Collections.unmodifiableList(deadlockedIds);
     }
 
     /**
      * @param threads in dump order
+     * @param jvmDeadlockedIds the ids the JVM reports as deadlocked, empty when it reports none
      */
-    static LockGraph of(List<ThreadSnapshot> threads) {
+    static LockGraph of(List<ThreadSnapshot> threads, long[] jvmDeadlockedIds) {
         Map<Long, ThreadSnapshot> byId = new HashMap<>();
         for (ThreadSnapshot thread : threads) {
             byId.put(thread.id(), thread);
@@ -86,7 +105,8 @@ final class LockGraph
         }
         waitersByHolder.replaceAll((id, waiters) -> Collections.unmodifiableList(waiters));
         return new LockGraph(Collections.unmodifiableList(cycles), behindCycles,
-                Collections.unmodifiableSet(inOrBehindCycles), Collections.unmodifiableMap(waitersByHolder));
+                Collections.unmodifiableSet(inOrBehindCycles), Collections.unmodifiableMap(waitersByHolder),
+                jvmDeadlockedIds);
     }
 
     /**
@@ -140,6 +160,23 @@ final class LockGraph
      */
     List<List<ThreadSnapshot>> cycles() {
         return cycles;
+    }
+
+    /**
+     * The cycles to report as deadlocks: {@link #cycles()} when the JVM reports deadlocked threads, and none otherwise.
+     * Empty also when the JVM reports deadlocked threads but the owner graph holds no cycle.
+     */
+    List<List<ThreadSnapshot>> deadlockCycles() {
+        return deadlockCycles;
+    }
+
+    /**
+     * The ids of the threads in {@link #deadlockCycles()}, cycle by cycle, or the ids the JVM reports as deadlocked
+     * when that list is empty. Empty when the JVM reports no deadlocked threads. An id can be missing from the
+     * snapshot's threads.
+     */
+    List<Long> deadlockedIds() {
+        return deadlockedIds;
     }
 
     /** The ids of the threads in a cycle and of the threads that wait, directly or not, on one. */

@@ -27,8 +27,8 @@ final class JvmSnapshot
 
     /** In dump order: name ignoring case, name, id. */
     final List<ThreadSnapshot> threads;
-    /** Empty when the JVM reports no deadlocked threads. */
-    final long[] deadlockedIds;
+    /** The ids the JVM reports as deadlocked, empty when it reports none. See {@link LockGraph#deadlockedIds()}. */
+    final long[] jvmDeadlockedIds;
     /** The pools that report usage, in JVM order. */
     final List<PoolSnapshot> pools;
     final List<GcSnapshot> collectors;
@@ -47,16 +47,14 @@ final class JvmSnapshot
     final boolean allocationAvailable;
     final long generatingThreadId;
     private final LockGraph locks;
-    private final Map<Long, ThreadSnapshot> threadsById;
     private final Map<Long, Integer> positionsById;
-    private final List<Long> deadlockedThreadIds;
 
-    private JvmSnapshot(List<ThreadSnapshot> threads, long[] deadlockedIds, List<PoolSnapshot> pools,
+    private JvmSnapshot(List<ThreadSnapshot> threads, long[] jvmDeadlockedIds, List<PoolSnapshot> pools,
             List<GcSnapshot> collectors, double systemCpuLoad, double processCpuLoad, long openFileDescriptors,
             long maxFileDescriptors, long uptimeMillis, long windowNanos, boolean cpuTimeAvailable,
             boolean allocationAvailable, long generatingThreadId) {
         this.threads = threads;
-        this.deadlockedIds = deadlockedIds;
+        this.jvmDeadlockedIds = jvmDeadlockedIds;
         this.pools = pools;
         this.collectors = collectors;
         this.systemCpuLoad = systemCpuLoad;
@@ -68,30 +66,13 @@ final class JvmSnapshot
         this.cpuTimeAvailable = cpuTimeAvailable;
         this.allocationAvailable = allocationAvailable;
         this.generatingThreadId = generatingThreadId;
-        this.locks = LockGraph.of(threads);
+        this.locks = LockGraph.of(threads, jvmDeadlockedIds);
 
-        Map<Long, ThreadSnapshot> threadsById = new HashMap<>();
         Map<Long, Integer> positionsById = new HashMap<>();
         for (int i = 0; i < threads.size(); i++) {
-            threadsById.putIfAbsent(threads.get(i).id(), threads.get(i));
             positionsById.putIfAbsent(threads.get(i).id(), i);
         }
-        this.threadsById = Collections.unmodifiableMap(threadsById);
         this.positionsById = Collections.unmodifiableMap(positionsById);
-
-        List<Long> deadlockedThreadIds = new ArrayList<>();
-        if (deadlockedIds.length > 0 && !locks.cycles().isEmpty()) {
-            for (List<ThreadSnapshot> cycle : locks.cycles()) {
-                for (ThreadSnapshot thread : cycle) {
-                    deadlockedThreadIds.add(thread.id());
-                }
-            }
-        } else {
-            for (long id : deadlockedIds) {
-                deadlockedThreadIds.add(id);
-            }
-        }
-        this.deadlockedThreadIds = Collections.unmodifiableList(deadlockedThreadIds);
     }
 
     /**
@@ -126,7 +107,7 @@ final class JvmSnapshot
         }
         boolean sampled = windowNanos > 0;
 
-        long[] deadlockedIds = threadBean.findDeadlockedThreads();
+        long[] jvmDeadlockedIds = threadBean.findDeadlockedThreads();
 
         Map<Long, ThreadInfo> infos = new HashMap<>();
         for (ThreadInfo info : threadBean.dumpAllThreads(false, false)) {
@@ -193,7 +174,7 @@ final class JvmSnapshot
 
         return new JvmSnapshot(
                 Collections.unmodifiableList(threads),
-                deadlockedIds == null ? new long[0] : deadlockedIds,
+                jvmDeadlockedIds == null ? new long[0] : jvmDeadlockedIds,
                 Collections.unmodifiableList(pools),
                 Collections.unmodifiableList(collectors),
                 systemCpuLoad,
@@ -218,22 +199,17 @@ final class JvmSnapshot
 
     /** Returns the thread with the id, or null when the snapshot holds none. */
     ThreadSnapshot thread(long id) {
-        return threadsById.get(id);
-    }
-
-    /** Returns the index of the thread with the id in {@link #threads}, or -1 when the snapshot holds none. */
-    int position(long id) {
         Integer position = positionsById.get(id);
-        return position == null ? -1 : position;
+        return position == null ? null : threads.get(position);
     }
 
     /**
-     * The ids of the threads in a lock cycle, cycle by cycle, or the ids the JVM reports as deadlocked when the owner
-     * graph holds no cycle. Empty when the JVM reports no deadlocked threads. An id can be missing from
-     * {@link #thread(long)}.
+     * Returns the index of the thread with the id in {@link #threads}, or {@code threads.size()} when the snapshot
+     * holds none, so a missing thread sorts after every present one.
      */
-    List<Long> deadlockedThreadIds() {
-        return deadlockedThreadIds;
+    int position(long id) {
+        Integer position = positionsById.get(id);
+        return position == null ? threads.size() : position;
     }
 
     /**

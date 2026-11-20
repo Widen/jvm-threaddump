@@ -103,7 +103,7 @@ public class TestJvmSnapshot
 
     @Test
     void holdsNoDeadlockedIdsWhenTheJvmReportsNone() {
-        assertThat(new FakeJvm().snapshot().deadlockedIds).isEmpty();
+        assertThat(new FakeJvm().snapshot().jvmDeadlockedIds).isEmpty();
     }
 
     @Test
@@ -114,7 +114,7 @@ public class TestJvmSnapshot
 
         JvmSnapshot snapshot = jvm.snapshot();
 
-        assertThat(snapshot.deadlockedIds).containsExactly(3, 26);
+        assertThat(snapshot.jvmDeadlockedIds).containsExactly(3, 26);
         assertThat(snapshot.collectors).singleElement().satisfies(collector -> {
             assertThat(collector.name).isEqualTo("G1 Young Generation");
             assertThat(collector.count).isEqualTo(12);

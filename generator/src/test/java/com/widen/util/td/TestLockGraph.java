@@ -7,6 +7,7 @@ import java.util.HashSet;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 
 public class TestLockGraph
 {
@@ -21,7 +22,7 @@ public class TestLockGraph
         jvm.addThreadWaitingOn("d", 4, Thread.State.BLOCKED, 3, null);
         jvm.addThread("e", 5, Thread.State.RUNNABLE);
         JvmSnapshot snapshot = jvm.snapshot();
-        LockGraph graph = LockGraph.of(snapshot.threads);
+        LockGraph graph = snapshot.locks();
 
         assertThat(graph.cycles()).containsExactly(Arrays.asList(thread(snapshot, 1), thread(snapshot, 2)));
         assertThat(graph.behind(graph.cycles().get(0))).containsExactly(thread(snapshot, 3), thread(snapshot, 4));
@@ -36,7 +37,7 @@ public class TestLockGraph
         jvm.addThreadWaitingOn("d", 2, Thread.State.BLOCKED, 3, null);
         jvm.addThreadWaitingOn("e", 3, Thread.State.BLOCKED, 2, null);
         JvmSnapshot snapshot = jvm.snapshot();
-        LockGraph graph = LockGraph.of(snapshot.threads);
+        LockGraph graph = snapshot.locks();
 
         assertThat(graph.cycles()).containsExactly(Arrays.asList(thread(snapshot, 2), thread(snapshot, 3)));
         assertThat(graph.behind(graph.cycles().get(0))).containsExactly(thread(snapshot, 1));
@@ -46,7 +47,7 @@ public class TestLockGraph
     void ignoresAThreadBlockedOnItself() {
         FakeJvm jvm = new FakeJvm();
         jvm.addThreadWaitingOn("s", 5, Thread.State.BLOCKED, 5, null);
-        LockGraph graph = LockGraph.of(jvm.snapshot().threads);
+        LockGraph graph = jvm.snapshot().locks();
 
         assertThat(graph.cycles()).isEmpty();
         assertThat(graph.waitersByHolder()).isEmpty();
@@ -61,7 +62,7 @@ public class TestLockGraph
         jvm.addThreadWaitingOn("w2", 13, Thread.State.BLOCKED, 12, null);
         JvmSnapshot snapshot = jvm.snapshot();
 
-        assertThat(LockGraph.of(snapshot.threads).waitersByHolder()).hasSize(1).containsEntry(10L,
+        assertThat(snapshot.locks().waitersByHolder()).hasSize(1).containsEntry(10L,
                 Arrays.asList(thread(snapshot, 12), thread(snapshot, 11), thread(snapshot, 13)));
     }
 
@@ -72,7 +73,7 @@ public class TestLockGraph
         jvm.addThreadWaitingOn("p", 20, Thread.State.WAITING, 10, null,
                 FakeThreads.frame("java.lang.Object", "wait"));
 
-        assertThat(LockGraph.of(jvm.snapshot().threads).waitersByHolder()).isEmpty();
+        assertThat(jvm.snapshot().locks().waitersByHolder()).isEmpty();
     }
 
     @Test
@@ -81,8 +82,47 @@ public class TestLockGraph
         jvm.addThreadWaitingOn("w", 30, Thread.State.BLOCKED, 99, null);
         JvmSnapshot snapshot = jvm.snapshot();
 
-        assertThat(LockGraph.of(snapshot.threads).waitersByHolder())
+        assertThat(snapshot.locks().waitersByHolder())
                 .isEqualTo(Collections.singletonMap(99L, Collections.singletonList(thread(snapshot, 30))));
+    }
+
+    @Test
+    void reportsTheCyclesAsDeadlocksWhenTheJvmReportsOne() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThreadWaitingOn("a", 1, Thread.State.BLOCKED, 2, null);
+        jvm.addThreadWaitingOn("b", 2, Thread.State.BLOCKED, 1, null);
+        jvm.addThreadWaitingOn("c", 3, Thread.State.BLOCKED, 1, null);
+        when(jvm.threads.findDeadlockedThreads()).thenReturn(new long[] { 1, 2, 3 });
+
+        LockGraph graph = jvm.snapshot().locks();
+
+        assertThat(graph.deadlockCycles()).isEqualTo(graph.cycles()).hasSize(1);
+        assertThat(graph.deadlockedIds()).containsExactly(1L, 2L);
+    }
+
+    @Test
+    void reportsTheJvmIdsWhenTheOwnerGraphHoldsNoCycle() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("a", 1, Thread.State.RUNNABLE);
+        when(jvm.threads.findDeadlockedThreads()).thenReturn(new long[] { 1, 99 });
+
+        LockGraph graph = jvm.snapshot().locks();
+
+        assertThat(graph.deadlockCycles()).isEmpty();
+        assertThat(graph.deadlockedIds()).containsExactly(1L, 99L);
+    }
+
+    @Test
+    void reportsNoDeadlocksWhenTheJvmReportsNone() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThreadWaitingOn("a", 1, Thread.State.BLOCKED, 2, null);
+        jvm.addThreadWaitingOn("b", 2, Thread.State.BLOCKED, 1, null);
+
+        LockGraph graph = jvm.snapshot().locks();
+
+        assertThat(graph.cycles()).hasSize(1);
+        assertThat(graph.deadlockCycles()).isEmpty();
+        assertThat(graph.deadlockedIds()).isEmpty();
     }
 
     private static ThreadSnapshot thread(JvmSnapshot snapshot, long id) {

@@ -30,7 +30,8 @@ final class LockPileUpCheck implements Check
         }
         piles.sort((one, other) -> {
             int bySize = Integer.compare(other.getValue().size(), one.getValue().size());
-            return bySize != 0 ? bySize : Integer.compare(position(snapshot, one.getKey()), position(snapshot, other.getKey()));
+            return bySize != 0 ? bySize
+                    : Integer.compare(snapshot.position(one.getKey()), snapshot.position(other.getKey()));
         });
 
         List<Finding> findings = new ArrayList<>();
@@ -54,10 +55,5 @@ final class LockPileUpCheck implements Check
             lines.add(ThreadSection.formatFrame(frame));
         }
         return new Finding(TITLE, lines, Collections.singletonList(Finding.threadMark(holderId)));
-    }
-
-    private static int position(JvmSnapshot snapshot, long threadId) {
-        int position = snapshot.position(threadId);
-        return position < 0 ? Integer.MAX_VALUE : position;
     }
 }

@@ -261,8 +261,8 @@ difference. The wait makes every dump take one window longer.
 - A thread that is already interrupted when it calls `generate()` skips the
   window, and the dump reads `not sampled`. An interrupt during the window ends
   the wait early and also leaves the dump `not sampled`, so no rate covers a
-  partial window. `generate()` sets the interrupt flag again and finishes the
-  dump.
+  partial window and the `CPU Load` line reads `Not Available`. `generate()`
+  sets the interrupt flag again and finishes the dump.
 - `ThreadDumpServlet` takes the window from a request parameter, a whole number
   of seconds from 0 to 30: `/td?window=5` samples for five seconds, and
   `/td?window=0` returns at once. Any other value gets status 400 with the body

@@ -356,7 +356,7 @@ dump, as the servlet does per request, starts from an existing dump.
   window.
 - When the calling thread is interrupted during the window, `generate` stops
   waiting, restores the interrupt flag, and finishes the dump as not sampled,
-  as for a zero window.
+  as for a zero window, with both CPU loads unavailable.
 - `ThreadDumpServlet` reads two optional request parameters. With neither, it
   serves its own dump. With either, it serves a dump built from its own with
   `toBuilder()` and the settings below.
@@ -410,7 +410,7 @@ Each behavior gets a test; variations share a parametrized test.
   GC Overhead, and the allocator lines print the expected rates; a thread that
   starts or ends mid-window is handled as described; a zero window prints
   `not sampled` and skips Hot Threads; an interrupted pause keeps the interrupt
-  flag set, returns a dump, and counts as not sampled.
+  flag set, returns a dump, counts as not sampled, and reports no CPU load.
 - **Findings block:** none, one, and several findings in table order.
 - **Markers:** each marked line type, and one line with two titles.
 - **Changed lines:** deadlocked names, thread state counts, file descriptors.

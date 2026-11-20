@@ -78,8 +78,8 @@ final class JvmSnapshot
     /**
      * Reads the JVM, pausing for {@code window} between a start and an end reading when it is above zero. A thread
      * that is already interrupted skips the window. An interrupt during the pause ends it early and leaves the
-     * snapshot not sampled, because a rate over a partial window misleads. Either way the interrupt flag stays set.
-     * The snapshot also counts as not sampled when no time passed.
+     * snapshot not sampled and its CPU loads unavailable, because a rate over a partial window misleads. Either way
+     * the interrupt flag stays set. The snapshot also counts as not sampled when no time passed.
      */
     static JvmSnapshot read(JvmSources jvm, Duration window) {
         ThreadMXBean threadBean = jvm.threads();
@@ -94,6 +94,7 @@ final class JvmSnapshot
 
         WindowStart start = null;
         long windowNanos = 0;
+        boolean interruptedInWindow = false;
         if (!window.isZero() && !window.isNegative() && !Thread.currentThread().isInterrupted()) {
             long startNanos = jvm.nanoTime();
             start = WindowStart.read(jvm, threadBean, cpuTimeAvailable, allocationAvailable ? sunThreadBean : null,
@@ -103,6 +104,7 @@ final class JvmSnapshot
                 windowNanos = jvm.nanoTime() - startNanos;
             }
             catch (InterruptedException e) {
+                interruptedInWindow = true;
                 Thread.currentThread().interrupt();
             }
         }
@@ -161,7 +163,7 @@ final class JvmSnapshot
 
         double systemCpuLoad = -1;
         double processCpuLoad = -1;
-        if (sunOs != null) {
+        if (sunOs != null && !interruptedInWindow) {
             systemCpuLoad = sunOs.getSystemCpuLoad();
             processCpuLoad = sunOs.getProcessCpuLoad();
         }

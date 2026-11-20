@@ -34,6 +34,9 @@ public final class JvmThreadDump
         return builder().build();
     }
 
+    /**
+     * Returns a builder with no main arguments and no custom values.
+     */
     public static Builder builder() {
         return new Builder();
     }

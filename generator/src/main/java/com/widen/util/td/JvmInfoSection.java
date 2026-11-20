@@ -28,6 +28,11 @@ import static java.lang.String.format;
  */
 final class JvmInfoSection
 {
+    /** The title of the line that {@link CpuSaturatedCheck} marks. */
+    static final String CPU_LOAD = "CPU Load";
+    /** The title of the line that {@link FileDescriptorsCheck} marks. */
+    static final String FILE_DESCRIPTORS = "File Descriptors";
+
     private static final String MASK = "****";
     private static final List<String> SECRET_WORDS = Arrays.asList(
             "password", "pass", "pwd", "secret", "token", "credential", "key");
@@ -92,12 +97,12 @@ final class JvmInfoSection
         String fileDescriptors = snapshot.openFileDescriptors < 0 || snapshot.maxFileDescriptors < 0
                 ? NOT_AVAILABLE
                 : format(Locale.US, "%,d open; %,d limit", snapshot.openFileDescriptors, snapshot.maxFileDescriptors);
-        lines.add(new TitledLine("File Descriptors",
-                fileDescriptors + findings.marker(Finding.lineMark("File Descriptors"))));
+        lines.add(new TitledLine(FILE_DESCRIPTORS,
+                fileDescriptors + findings.marker(Finding.lineMark(FILE_DESCRIPTORS))));
         String cpuLoad = snapshot.systemCpuLoad < 0 || snapshot.processCpuLoad < 0
                 ? NOT_AVAILABLE
                 : format(Locale.US, "%.4f system; %.4f jvm (0.0 to 1.0)", snapshot.systemCpuLoad, snapshot.processCpuLoad);
-        lines.add(new TitledLine("CPU Load", cpuLoad + findings.marker(Finding.lineMark("CPU Load"))));
+        lines.add(new TitledLine(CPU_LOAD, cpuLoad + findings.marker(Finding.lineMark(CPU_LOAD))));
 
         long[] uptime = systemUptimeSeconds();
         lines.add(new TitledLine("System Uptime", formatTime(uptime[0], TimeUnit.SECONDS)));

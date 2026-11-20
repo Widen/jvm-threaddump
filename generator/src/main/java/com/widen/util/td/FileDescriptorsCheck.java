@@ -28,6 +28,6 @@ final class FileDescriptorsCheck implements Check
         String line = String.format(Locale.US, "%,d of %,d file descriptors are open (%d%%)", open, max,
                 open * 100 / max);
         return Collections.singletonList(
-                new Finding(TITLE, Collections.singletonList(line), Collections.singletonList(Finding.lineMark(TITLE))));
+                new Finding(TITLE, Collections.singletonList(line), Collections.singletonList(Finding.lineMark(JvmInfoSection.FILE_DESCRIPTORS))));
     }
 }

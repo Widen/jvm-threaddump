@@ -57,7 +57,7 @@ final class LockPileUpCheck implements Check
     }
 
     private static int position(JvmSnapshot snapshot, long threadId) {
-        ThreadSnapshot thread = snapshot.thread(threadId);
-        return thread == null ? Integer.MAX_VALUE : snapshot.threads.indexOf(thread);
+        int position = snapshot.position(threadId);
+        return position < 0 ? Integer.MAX_VALUE : position;
     }
 }

@@ -4,12 +4,13 @@ import java.lang.management.MemoryType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Flags an old-generation pool that is nearly full both now and after its last collection. Either reading alone
  * misleads: current usage includes garbage, and the after-collection reading can be hours old. A heap pool is old
- * generation when its name contains {@code Old} or {@code Tenured}, or when it is the JVM's only heap pool, as with
- * Shenandoah and non-generational ZGC.
+ * generation when its name contains {@code old} or {@code tenured} in any case, as in OpenJ9's {@code tenured-SOA},
+ * or when it is the JVM's only heap pool, as with Shenandoah and non-generational ZGC.
  */
 final class HeapFullCheck implements Check
 {
@@ -45,7 +46,10 @@ final class HeapFullCheck implements Check
     }
 
     private static boolean isOldGeneration(PoolSnapshot pool, int heapPools) {
-        return pool.type == MemoryType.HEAP
-                && (heapPools == 1 || pool.name.contains("Old") || pool.name.contains("Tenured"));
+        if (pool.type != MemoryType.HEAP) {
+            return false;
+        }
+        String name = pool.name.toLowerCase(Locale.ROOT);
+        return heapPools == 1 || name.contains("old") || name.contains("tenured");
     }
 }

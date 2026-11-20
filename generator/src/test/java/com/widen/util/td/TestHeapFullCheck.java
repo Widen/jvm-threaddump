@@ -41,14 +41,16 @@ public class TestHeapFullCheck
 
     @ParameterizedTest
     @CsvSource({
-            "ZHeap,          false, true",
-            "ZHeap,          true,  false",
-            "G1 Eden Space,  true,  false" })
-    void countsTheOnlyHeapPoolAsOldGeneration(String name, boolean withSecondHeapPool, boolean flagged) {
+            "ZHeap,          ,                   true",
+            "ZHeap,          G1 Survivor Space,  false",
+            "G1 Eden Space,  G1 Survivor Space,  false",
+            "tenured-SOA,    nursery-allocate,   true" })
+    void findsTheOldGenerationPoolByNameOrAsTheOnlyHeapPool(String name, String secondHeapPoolName,
+            boolean flagged) {
         FakeJvm jvm = new FakeJvm();
         jvm.addPool(name, MemoryType.HEAP, usage(3880, 4000), usage(3840, 4000));
-        if (withSecondHeapPool) {
-            jvm.addPool("G1 Survivor Space", MemoryType.HEAP, usage(3880, 4000), usage(3840, 4000));
+        if (secondHeapPoolName != null) {
+            jvm.addPool(secondHeapPoolName, MemoryType.HEAP, usage(3880, 4000), usage(3840, 4000));
         }
 
         assertThat(new HeapFullCheck().findings(jvm.snapshot())).hasSize(flagged ? 1 : 0);

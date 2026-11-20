@@ -76,7 +76,7 @@ final class FakeJvm implements JvmSources
     private static ThreadMXBean mockThreads() {
         ThreadMXBean bean = mock(ThreadMXBean.class);
         when(bean.findDeadlockedThreads()).thenReturn(null);
-        when(bean.dumpAllThreads(true, true)).thenReturn(new ThreadInfo[0]);
+        when(bean.dumpAllThreads(false, false)).thenReturn(new ThreadInfo[0]);
         when(bean.isThreadCpuTimeSupported()).thenReturn(false);
         when(bean.isCurrentThreadCpuTimeSupported()).thenReturn(false);
         return bean;

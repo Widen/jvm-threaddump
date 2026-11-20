@@ -35,7 +35,7 @@ final class ThreadSection
         boolean cpuTimeEnabled = threadBean.isThreadCpuTimeSupported() && threadBean.isThreadCpuTimeEnabled();
 
         Map<Long, ThreadInfo> infos = new HashMap<>();
-        for (ThreadInfo info : threadBean.dumpAllThreads(true, true)) {
+        for (ThreadInfo info : threadBean.dumpAllThreads(false, false)) {
             infos.put(info.getThreadId(), info);
         }
         List<Thread> threads = new ArrayList<>();

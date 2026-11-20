@@ -91,7 +91,7 @@ public class TestThreadSection
             jvm.liveThreads.add(FakeThreads.thread(names[i], ids[i]));
             infos[i] = FakeThreads.info(ids[i], Thread.State.RUNNABLE);
         }
-        when(jvm.threads.dumpAllThreads(true, true)).thenReturn(infos);
+        when(jvm.threads.dumpAllThreads(false, false)).thenReturn(infos);
 
         List<String> text = TestText.render(new ThreadSection(jvm).lines());
 
@@ -107,7 +107,7 @@ public class TestThreadSection
         jvm.liveThreads.addAll(Arrays.asList(FakeThreads.thread("gone", 50), FakeThreads.thread("kept", 61)));
         ThreadInfo orphan = FakeThreads.info(60, Thread.State.RUNNABLE);
         ThreadInfo kept = FakeThreads.info(61, Thread.State.RUNNABLE);
-        when(jvm.threads.dumpAllThreads(true, true)).thenReturn(new ThreadInfo[] {orphan, kept});
+        when(jvm.threads.dumpAllThreads(false, false)).thenReturn(new ThreadInfo[] {orphan, kept});
 
         List<String> text = TestText.render(new ThreadSection(jvm).lines());
 
@@ -130,7 +130,7 @@ public class TestThreadSection
         FakeJvm jvm = new FakeJvm();
         jvm.liveThreads.add(FakeThreads.thread("worker-1", 23));
         ThreadInfo info = FakeThreads.info(23, Thread.State.RUNNABLE);
-        when(jvm.threads.dumpAllThreads(true, true)).thenReturn(new ThreadInfo[] {info});
+        when(jvm.threads.dumpAllThreads(false, false)).thenReturn(new ThreadInfo[] {info});
         when(jvm.threads.isThreadCpuTimeSupported()).thenReturn(true);
         when(jvm.threads.isThreadCpuTimeEnabled()).thenReturn(true);
         when(jvm.threads.getThreadCpuTime(23)).thenReturn(1_500_000_000L);
@@ -166,7 +166,7 @@ public class TestThreadSection
     private static List<Line> lines(Thread thread, ThreadInfo info) {
         FakeJvm jvm = new FakeJvm();
         jvm.liveThreads.add(thread);
-        when(jvm.threads.dumpAllThreads(true, true)).thenReturn(new ThreadInfo[] {info});
+        when(jvm.threads.dumpAllThreads(false, false)).thenReturn(new ThreadInfo[] {info});
         return new ThreadSection(jvm).lines();
     }
 

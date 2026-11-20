@@ -21,17 +21,23 @@ both, and fixes the review's bugs where the refactor touches them.
 ## Goals
 
 - Build with Gradle 9.9.2 and Kotlin build scripts (`*.gradle.kts`).
-- Produce Java 8 bytecode, and compile and run tests on a Java 8 JDK.
+- Build on a Java 17 toolchain, compile with `--release 8` so the library runs
+  on Java 8 and later, and run the tests on both Java 17 and Java 8.
 - Publish both artifacts to Acquia JFrog with plain `maven-publish`.
 - Refactor the generator so every section of the dump can be unit tested with
   fake JVM data.
+- Replace the subclass hooks with a builder, and let `ThreadDumpServlet` serve
+  a configured dump, so consumers neither subclass the generator nor copy the
+  servlet.
 - Cover most current behavior with unit tests: every section of the dump, the
   thread ordering, the formatting helpers, and the servlet's response.
 - Fix the review's bugs listed under Bug fixes.
 
 ## Non-goals
 
-- Supporting Java 9 or later APIs. The library targets Java 8 only.
+- Calling Java 9 or later APIs. `--release 8` rejects them. A multi-release
+  JAR can add them when a need appears, such as listing virtual threads on
+  Java 21.
 - A Buildkite pipeline. A later change adds one.
 - Changing the dump's layout beyond what a bug fix needs. Section order, titles,
   and the 22-column title padding stay.
@@ -39,21 +45,26 @@ both, and fixes the review's bugs where the refactor touches them.
 
 ## Anti-goals
 
-- Breaking mica. `Widen/mica` (`mica-web-app/.../ThreadDumpServletImpl.java`)
-  is the only known consumer. It depends on
-  `widen:jvm-threaddump-generator:2.0.0`, implements nothing from the servlet
-  module, and subclasses `JvmThreadDumpImpl`. A change that stops that class
-  from compiling or changes what it relies on is a failure, even if every test
-  passes.
+- Leaving mica without an upgrade path. `Widen/mica` is the only known
+  consumer, and its `java17-alpha` line, which builds on Java 17, takes this
+  release. `mica-web-app/.../ThreadDumpServletImpl.java` depends on
+  `widen:jvm-threaddump-generator:2.0.0`, subclasses `JvmThreadDumpImpl` to
+  supply main arguments and custom values, and copies the servlet's response
+  code. Version 3.0.0 changes the public API, so mica changes when it
+  upgrades. A test here copies the servlet mica will write, so the new API
+  covers everything mica does today.
 
 ## Constraints
 
-- **Public API to keep:** the `JvmThreadDump` interface and its `generate()`
-  method; `JvmThreadDumpImpl` as a public, non-final class with a public no-arg
-  constructor; and its `protected List<String> getMainArguments()` and
-  `protected Map<String, Object> getCustomValues()` hooks.
-  `ThreadDumpServlet` keeps its name, package, and no-arg constructor. Every
-  other class is package-private and free to change.
+- **Public API:** `JvmThreadDump` is a public final class with
+  `static JvmThreadDump create()`, `static Builder builder()`, and
+  `String generate()`. `JvmThreadDump.Builder` has
+  `mainArguments(List<String>)`, `customValues(Map<String, ?>)`, and
+  `build()`. `JvmThreadDumpImpl` and its protected hooks are removed.
+  `ThreadDumpServlet` keeps its name, package, and no-arg constructor, and
+  gains a public constructor that takes a `JvmThreadDump`. Every other class
+  is package-private and free to change, including `Line` and
+  `ThreadDumpProducer`, which are public in 2.0.0.
 - **Coordinates:** group `widen`, artifacts `jvm-threaddump-generator` and
   `jvm-threaddump-servlet`. The Gradle project names stay the same.
 - **Repositories:** credentials come from the `ACQUIA_JFROG_USER` and
@@ -63,11 +74,12 @@ both, and fixes the review's bugs where the refactor touches them.
   they resolve from Maven Central, so a build without credentials still runs.
   Publishing requires the credentials and fails with an error naming the
   missing ones.
-- **Java 8 test libraries:** JUnit 6 needs Java 17 and Mockito 5 needs Java 11,
-  so tests use JUnit Jupiter 5.14.4, AssertJ 3.27.7, and Mockito 4.11.0.
-- **Tests on Java 8 do not see `ThreadInfo.getPriority()` or `isDaemon()`**,
-  which Java 9 added. Priority, daemon status, thread group, and `toString()`
-  still come from `Thread` objects.
+- **Test libraries:** tests also run on Java 8, and JUnit 6 needs Java 17 and
+  Mockito 5 needs Java 11, so tests use JUnit Jupiter 5.14.4, AssertJ 3.27.7,
+  and Mockito 4.11.0. Test code compiles with `--release 8` too.
+- **No Java 9+ calls:** `--release 8` hides `ThreadInfo.getPriority()` and
+  `isDaemon()`, which Java 9 added, so priority, daemon status, thread group,
+  and `toString()` still come from `Thread` objects.
 
 ## Approaches
 
@@ -103,12 +115,24 @@ Removing nebula removes the version it derived from git tags.
 
 ### Java toolchain
 
-Gradle 9 runs only on Java 17 or later. The build compiles with a Java 8
-toolchain, rather than JDK 21 with `--release 8`, so that tests see Java 8's
-real memory pool names and runtime behavior. The Gradle 9.9.2 compatibility
-matrix lists Java 8 as supported for compilation and testing through
-toolchains. If the first build shows otherwise, stop and ask before falling
-back to `--release 8`.
+Gradle 9 runs only on Java 17 or later. The build compiles and tests with a
+Java 17 toolchain and compiles all code with `options.release = 8`, so the
+JARs load on Java 8 and the compiler rejects any Java 9+ API. `test` runs the
+tests on Java 17, the runtime of mica's `java17-alpha` line, the consumer of
+this release. `testOnJava8` runs the same test classes on a Java 8 launcher,
+so the shipped bytecode is exercised on Java 8's real memory pools and
+runtime. `check` depends on both.
+
+Gradle finds the Java 8 JDK through `org.gradle.java.installations.fromEnv=JDK8`
+in `gradle.properties`; `mise.toml` installs `corretto-8` next to Java 21 and
+sets `JDK8` to its home. Without that variable, the foojay resolver downloads
+a Java 8 JDK.
+
+Java 9+ APIs stay out for now. The ones that would change the dump,
+`ThreadInfo.getPriority()` and `isDaemon()`, still leave thread group and
+`toString()` on `Thread`, so they would not remove the join in bug fix 9. A
+multi-release JAR, with a `java9` source set under `META-INF/versions/9`, can
+add them later.
 
 ## Layer 1: `modernize-1-gradle-9`
 
@@ -118,12 +142,17 @@ test) moves into this layer, because the build cannot pass reliably without
 it.
 
 - **Wrapper:** Gradle 9.9.2, generated with `./gradlew wrapper`.
-- **mise:** a new `mise.toml` pins `java = "21"` to run Gradle. No other tools.
+- **mise:** a new `mise.toml` sets `java = ["21", "corretto-8"]`, where the
+  first entry runs Gradle, and sets
+  `JDK8 = "{{env.HOME}}/.local/share/mise/installs/java/corretto-8"`. No other
+  tools.
 - **Toolchain:**
-  `java { toolchain { languageVersion = JavaLanguageVersion.of(8) } }`.
+  `java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }`, and
+  every `JavaCompile` task sets `options.release = 8`. A `testOnJava8` task
+  runs the test classes with a Java 8 launcher, and `check` depends on it.
   `settings.gradle.kts` applies
-  `org.gradle.toolchains.foojay-resolver-convention` so Gradle downloads a Java
-  8 JDK when none is installed.
+  `org.gradle.toolchains.foojay-resolver-convention` so Gradle downloads a
+  missing JDK.
 - **Settings:** `settings.gradle.kts` includes `generator` and `servlet` and
   renames them to `jvm-threaddump-generator` and `jvm-threaddump-servlet`, as
   `settings.gradle` does today.
@@ -147,9 +176,10 @@ it.
 - **README:** a short Build section: `mise install`, then `./gradlew test`, and
   how to publish.
 
-Done when `mise exec -- ./gradlew build` passes, `publishToMavenLocal` writes
-both artifacts with sources JARs and POMs to `~/.m2`, and the generator POM
-lists no dependencies while the servlet POM lists the generator.
+Done when `mise exec -- ./gradlew build` passes with the tests run on Java 17
+and Java 8, the class files are major version 52 (Java 8), `publishToMavenLocal`
+writes both artifacts with sources JARs and POMs to `~/.m2`, and the generator
+POM lists no dependencies while the servlet POM lists the generator.
 
 ## Layer 2: `modernize-2-testable-refactor`
 
@@ -164,13 +194,20 @@ lists no dependencies while the servlet POM lists the generator.
   `/proc/uptime` that returns empty when the file is missing, and a supplier of
   `Thread.getAllStackTraces()`. A static `platform()` factory builds it from
   the real JVM.
-- **`JvmThreadDumpImpl`:** the public no-arg constructor uses
-  `JvmSources.platform()`. A package-private constructor takes a `JvmSources`.
-  `generate()` builds a local list of lines on each call, so the instance holds
-  no state between calls and is safe to share across threads.
+- **`JvmThreadDump`:** `create()` and `builder().build()` read from
+  `JvmSources.platform()`; a package-private builder method swaps in another
+  `JvmSources`. `build()` copies the main arguments and custom values into
+  unmodifiable collections, keeping the map's iteration order, so later
+  changes to the caller's list or map do not reach the dump. On each call,
+  `generate()` builds a local list of lines and calls `String.valueOf` on each
+  custom value, so the instance is immutable and safe to share across threads.
 - **Sections:** one package-private class per section: JVM info, memory, GC,
   deadlocks, and threads. Each takes a `JvmSources` and returns its lines.
-  JVM info also takes the main arguments and custom values from the hooks.
+  JVM info also takes the main arguments and custom values from the builder.
+- **`ThreadDumpServlet`:** holds one `JvmThreadDump`, the one passed to its
+  constructor or `JvmThreadDump.create()` for the no-arg constructor, and
+  serves it on `GET`. A consumer that needs custom values subclasses the
+  servlet and passes a built dump to `super`.
 - **Helpers:** `DurationFormatUtils` and `StringUtils` shrink to a small
   duration formatter that handles the formats the dump uses. `BytesUtils` and
   `Line` stay, with the fixes below.
@@ -183,10 +220,13 @@ The numbers match the code review.
    by id, so no two threads compare as equal.
 2. **Secrets:** in "JVM System Props", replace the value of any `-D` property
    whose key contains `password`, `secret`, `token`, `credential`, or `key`,
-   ignoring case, with `****`. The key still prints.
+   ignoring case, with `****`. Also mask a value that contains one of those
+   words followed by `=`, ignoring case, such as a JDBC URL with
+   `?password=x`. The key still prints.
 3. **Servlet response:** set `text/plain; charset=UTF-8`, write the UTF-8 bytes
    of the dump to the output stream, and set the content length to their count.
-4. **Instance state:** fixed by the local list in `generate()`.
+4. **Instance state:** fixed by the immutable `JvmThreadDump` and the local
+   list in `generate()`.
 5. **Shared `DecimalFormat`:** create a `NumberFormat` per call.
 6. **Null pool usage:** skip a pool whose `getUsage()` returns null.
 7. **Deadlock test (done in layer 1):** a monitor deadlock lasts for the
@@ -201,14 +241,18 @@ The numbers match the code review.
    is mainly tested with a fake `ThreadMXBean` in layer 2.
 8. **Pool order:** add the Java 8 G1 pool names (`G1 Eden Space`,
    `G1 Survivor Space`, `G1 Old Gen`) and Serial pool names (`Eden Space`,
-   `Survivor Space`, `Tenured Gen`) to the print order, drop names Java 8 never
-   reports, and print unlisted pools in name order.
+   `Survivor Space`, `Tenured Gen`) and the Java 9+ code heap names
+   (`CodeHeap 'non-nmethods'`, `CodeHeap 'profiled nmethods'`,
+   `CodeHeap 'non-profiled nmethods'`) to the print order, drop the perm gen
+   and short G1 names that no supported JVM reports, and print unlisted pools
+   in name order.
 9. **Consistent thread snapshot:** take state, lock, and stack from one
    `threadBean.dumpAllThreads(true, true)` call, joined by thread id to the
    `Thread` objects for priority, daemon status, group, and `toString()`. Print
    the lock a thread waits on in every waiting state, not only when it has an
    owner. Threads that end between the two calls are left out.
-10. **README:** fix the examples so they compile against the real API.
+10. **README:** rewrite the examples for the builder and the servlet
+    constructor, so they compile against the real API.
 
 The review's smaller findings are fixed as follows:
 
@@ -236,20 +280,23 @@ test.
 - **Secret masking:** masked and unmasked keys.
 - **Helpers:** byte sizes at unit boundaries, durations including sub-second GC
   time and multi-day uptime, and each `Line` type's padding.
-- **Hooks:** a `JvmThreadDumpImpl` subclass that overrides both hooks, as mica
-  does, prints its main arguments and custom values.
-- **Repeat calls:** two `generate()` calls on one instance return dumps of
-  similar length, not a growing one.
-- **Real JVM:** one smoke test that `new JvmThreadDumpImpl().generate()` prints
+- **Builder:** main arguments print in list order and custom values in the
+  map's order, and changing the caller's list or map after `build()` changes
+  nothing.
+- **Repeat calls:** two `generate()` calls on one instance with fixed fakes
+  return the same dump, not a growing one.
+- **Real JVM:** one smoke test that `JvmThreadDump.create().generate()` prints
   every section title and "Deadlocked Threads: None", and one that the deadlock
   helper's threads show up as deadlocked.
 - **Servlet:** with a Mockito `HttpServletResponse`, the content type, every
   header, and a content length that matches the UTF-8 byte count of a dump with
-  non-ASCII text.
+  non-ASCII text. A copy of the servlet mica will write (a `ThreadDumpServlet`
+  subclass that passes a built dump with main arguments and custom values to
+  `super`) serves those values.
 
-Done when the module tests pass on the Java 8 toolchain, mica's
-`ThreadDumpServletImpl` pattern compiles against the new generator (a test
-copies its subclass), and every bug fix above has a test that fails without it.
+Done when the module tests pass on Java 17 and on Java 8, the class files are
+still major version 52, and every bug fix above has a test that fails without
+it.
 
 ## Calls made without review
 
@@ -257,9 +304,9 @@ These were the designer's calls, not decisions made together:
 
 - The servlet API becomes `compileOnly` in the servlet module.
 - A version catalog holds the versions.
-- The foojay resolver downloads a Java 8 JDK when none is installed.
+- The foojay resolver downloads a missing JDK.
 - Secret masking matches `password`, `secret`, `token`, `credential`, and
-  `key` in property names.
+  `key` in property names, and the same words followed by `=` in values.
 - GC time gains milliseconds, and the memory header gets a new label.
 - The hostname lookup stays as it is.
 - The deadlock test fix moves into layer 1.
@@ -268,5 +315,5 @@ These were the designer's calls, not decisions made together:
 
 - Names of the section classes and of `JvmSources`' accessors.
 - The duration formatter's shape, as long as it handles the formats above.
-- How tests build fake `ThreadInfo` objects on Java 8, where the class has no
-  public constructor: Mockito mocks or `ThreadInfo.from(CompositeData)`.
+- How tests build fake `ThreadInfo` objects, which have no public
+  constructor: Mockito mocks or `ThreadInfo.from(CompositeData)`.

@@ -185,9 +185,11 @@ When no check flags anything, the block is one line:
 
 `None` means the checks flagged nothing. It does not mean the JVM is healthy:
 the checks look for a fixed set of problems at fixed thresholds. The count
-covers the checks that ran. A check whose data is unavailable, such as
-`CPU Saturated` when the JVM reports no CPU load, does not run and does not
-count.
+covers the checks that ran. A check whose data is unavailable does not run and
+does not count. Three checks can be skipped this way: `CPU Saturated` when the
+JVM reports no CPU load, `File Descriptors` when the JVM's operating system bean
+is not a Unix one, and `Hot Threads` when per-thread CPU time is unsupported or
+disabled (or when no window ran).
 
 ### The checks
 
@@ -201,7 +203,7 @@ count.
 | GC Overhead | uses one | Garbage collection took 25% or more of the window and at least 500 ms, or 10% or more of JVM uptime. |
 | CPU Saturated | uses one | The system CPU load is 0.90 or higher. |
 | File Descriptors | no | The open file descriptors are 90% or more of the limit. |
-| Hot Threads | yes | A thread used 50% or more of one core during the window. |
+| Hot Threads | yes | A thread used 50% or more of one core during the window. Needs per-thread CPU time to be supported and enabled. |
 
 Notes on the checks:
 
@@ -214,8 +216,10 @@ Notes on the checks:
   frame outside the JDK that the frame filter keeps, so it names the library a
   thread is stuck in, such as a drained connection pool. Idle threads, such as a
   `WAITING` server worker with no application code on its stack, stay out of the
-  count. The finding prints the count, the count per thread state, the two
-  frames, and the first three thread names. It marks no lines.
+  count, as do the thread that generates the dump and every thread counted in a
+  `Lock Pile-up`. The finding prints the count, the count per thread state, the
+  top frame, the library frame when it differs from the top frame, and the first
+  three thread names. It marks no lines.
 - **Heap Full** needs both readings at 90%. The current usage includes garbage,
   so a healthy Parallel or Serial old generation passes 90% before every full
   collection. The usage after the last collection can be hours old. A pool with
@@ -228,7 +232,8 @@ Notes on the checks:
   whole CPU time as the window's.
 - **Top allocators** under `Heap Full` and `GC Overhead` list up to three
   threads that allocated 1 MB per second or more during the window. They appear
-  only when the JVM supports per-thread allocation figures.
+  only when the dump sampled a window and the JVM supports per-thread
+  allocation figures, so a zero window prints none.
 
 ### The sampling window
 
@@ -246,9 +251,10 @@ difference. The wait makes every dump take one window longer.
   The header then says `not sampled` in place of `sampled over 1.0s`, and
   `Hot Threads`, the one check that needs a window, does not run and does not
   count: `Findings: None (8 checks, not sampled)`.
-- If another thread interrupts the caller during the window, `generate()` stops
-  waiting, sets the interrupt flag again, and finishes the dump with the time
-  that passed.
+- A thread that is already interrupted when it calls `generate()` skips the
+  window, and the dump reads `not sampled`. An interrupt during the window ends
+  the wait early: `generate()` sets the interrupt flag again and finishes the
+  dump with the time that passed.
 - `ThreadDumpServlet` takes the window from a request parameter, a whole number
   of seconds from 0 to 30: `/td?window=5` samples for five seconds, and
   `/td?window=0` returns at once. Any other value gets status 400 with the body

@@ -57,7 +57,7 @@ final class StackFilter
         return null;
     }
 
-    private static boolean startsWithAny(String className, List<String> prefixes) {
+    static boolean startsWithAny(String className, List<String> prefixes) {
         for (String prefix : prefixes) {
             if (className.startsWith(prefix)) {
                 return true;

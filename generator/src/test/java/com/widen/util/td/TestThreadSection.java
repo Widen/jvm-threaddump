@@ -15,6 +15,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import static com.widen.util.td.TestText.titled;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.when;
 
 public class TestThreadSection
@@ -91,7 +92,7 @@ public class TestThreadSection
             jvm.liveThreads.add(FakeThreads.thread(names[i], ids[i]));
             infos[i] = FakeThreads.info(ids[i], Thread.State.RUNNABLE);
         }
-        when(jvm.threads.dumpAllThreads(false, false)).thenReturn(infos);
+        when(jvm.threads.dumpAllThreads(anyBoolean(), anyBoolean())).thenReturn(infos);
 
         List<String> text = TestText.render(new ThreadSection(jvm).lines());
 
@@ -107,7 +108,7 @@ public class TestThreadSection
         jvm.liveThreads.addAll(Arrays.asList(FakeThreads.thread("gone", 50), FakeThreads.thread("kept", 61)));
         ThreadInfo orphan = FakeThreads.info(60, Thread.State.RUNNABLE);
         ThreadInfo kept = FakeThreads.info(61, Thread.State.RUNNABLE);
-        when(jvm.threads.dumpAllThreads(false, false)).thenReturn(new ThreadInfo[] {orphan, kept});
+        when(jvm.threads.dumpAllThreads(anyBoolean(), anyBoolean())).thenReturn(new ThreadInfo[] {orphan, kept});
 
         List<String> text = TestText.render(new ThreadSection(jvm).lines());
 
@@ -130,7 +131,7 @@ public class TestThreadSection
         FakeJvm jvm = new FakeJvm();
         jvm.liveThreads.add(FakeThreads.thread("worker-1", 23));
         ThreadInfo info = FakeThreads.info(23, Thread.State.RUNNABLE);
-        when(jvm.threads.dumpAllThreads(false, false)).thenReturn(new ThreadInfo[] {info});
+        when(jvm.threads.dumpAllThreads(anyBoolean(), anyBoolean())).thenReturn(new ThreadInfo[] {info});
         when(jvm.threads.isThreadCpuTimeSupported()).thenReturn(true);
         when(jvm.threads.isThreadCpuTimeEnabled()).thenReturn(true);
         when(jvm.threads.getThreadCpuTime(23)).thenReturn(1_500_000_000L);
@@ -145,7 +146,7 @@ public class TestThreadSection
         Thread thread = FakeThreads.thread("before", 23);
         jvm.liveThreads.add(thread);
         ThreadInfo info = FakeThreads.info(23, Thread.State.RUNNABLE);
-        when(jvm.threads.dumpAllThreads(false, false)).thenReturn(new ThreadInfo[] {info});
+        when(jvm.threads.dumpAllThreads(anyBoolean(), anyBoolean())).thenReturn(new ThreadInfo[] {info});
         when(jvm.threads.isThreadCpuTimeSupported()).thenReturn(true);
         when(jvm.threads.isThreadCpuTimeEnabled()).thenReturn(true);
         when(jvm.threads.getThreadCpuTime(23)).thenAnswer(invocation -> {
@@ -188,7 +189,7 @@ public class TestThreadSection
     private static List<Line> lines(Thread thread, ThreadInfo info) {
         FakeJvm jvm = new FakeJvm();
         jvm.liveThreads.add(thread);
-        when(jvm.threads.dumpAllThreads(false, false)).thenReturn(new ThreadInfo[] {info});
+        when(jvm.threads.dumpAllThreads(anyBoolean(), anyBoolean())).thenReturn(new ThreadInfo[] {info});
         return new ThreadSection(jvm).lines();
     }
 

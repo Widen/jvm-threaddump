@@ -200,7 +200,7 @@ disabled, or when no window ran.
 | Stack Pile-up | no | 10 or more threads that are not idle are stuck in the same call. |
 | Heap Full | no | An old-generation heap pool holds 90% or more of its max now and held 90% or more after its last collection. |
 | Metadata Full | no | `Metaspace`, `Compressed Class Space`, `Code Cache`, or a `CodeHeap` pool holds 90% or more of a defined max. |
-| GC Overhead | uses one | Garbage collection took 25% or more of the window and at least 500 ms, or 10% or more of JVM uptime. |
+| GC Overhead | uses one | Garbage collection took 25% or more of the window and at least 500 ms, or 10% or more of JVM uptime after the first 5 minutes. |
 | CPU Saturated | uses one | The system CPU load is 0.90 or higher. |
 | File Descriptors | no | The open file descriptors are 90% or more of the limit. |
 | Hot Threads | yes | A thread used 50% or more of one core during the window. Needs per-thread CPU time to be supported and enabled. |
@@ -228,7 +228,9 @@ Notes on the checks:
   skips a pool with no after-collection reading or no defined max.
 - **GC Overhead** leaves out collectors that report concurrent work instead of
   pauses (names that contain `Cycles` or `Concurrent`). The lifetime measure is
-  an average since the JVM started, and runs with or without a window.
+  an average since the JVM started. It runs with or without a window, but only
+  once the JVM has run for 5 minutes, because collections at startup inflate the
+  average of a younger JVM.
 - **Hot Threads** lists up to five threads, highest first, with the top three
   frames of each stack. A thread that started during the window counts its
   whole CPU time as the window's.

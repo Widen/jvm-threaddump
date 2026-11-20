@@ -69,6 +69,27 @@ public class TestGcOverheadCheck
         }
     }
 
+    @ParameterizedTest
+    @CsvSource({
+            "300000, true",
+            "299999, false",
+            "0,      false" })
+    void waitsFiveMinutesOfUptimeBeforeTheLifetimeMeasure(long uptimeMillis, boolean flagged) {
+        FakeJvm jvm = new FakeJvm();
+        when(jvm.runtime.getUptime()).thenReturn(uptimeMillis);
+        jvm.addCollector("G1 Young Generation", 500, 30_000);
+
+        List<Finding> findings = new GcOverheadCheck().findings(jvm.snapshot());
+
+        if (flagged) {
+            assertThat(findings).hasSize(1);
+            assertThat(findings.get(0).lines).containsExactly(LIFETIME_LINE);
+        }
+        else {
+            assertThat(findings).isEmpty();
+        }
+    }
+
     @Test
     void printsBothMeasuresAndTheAllocators() {
         FakeJvm jvm = new FakeJvm();

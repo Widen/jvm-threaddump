@@ -102,6 +102,19 @@ public class TestGcOverheadCheck
     }
 
     @Test
+    void marksOnlyTheCollectorsThatRanInTheWindowWhenBothMeasuresFlag() {
+        FakeJvm jvm = new FakeJvm();
+        addCollector(jvm, "Young", 10, 9_005_500, 12, 9_006_100);
+        addCollector(jvm, "Old", 3, 0, 3, 0);
+
+        List<Finding> findings = new GcOverheadCheck().findings(jvm.snapshot(Duration.ofSeconds(1)));
+
+        assertThat(findings.get(0).lines).containsExactly(
+                "GC took 60% of the last 1.0s in 2 collections", LIFETIME_LINE);
+        assertThat(findings.get(0).marks).containsExactly("gc:Young");
+    }
+
+    @Test
     void leavesOutConcurrentCollectorsAndUnknownTimes() {
         FakeJvm jvm = new FakeJvm();
         addCollector(jvm, "G1 Young Generation", 10, 1000, 12, 1500);

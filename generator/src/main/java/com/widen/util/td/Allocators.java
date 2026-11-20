@@ -10,7 +10,8 @@ import java.util.Locale;
  */
 final class Allocators
 {
-    static final long MIN_BYTES_PER_SECOND = 1024L * 1024L;
+    private static final long BYTES_PER_MB = 1024L * 1024L;
+    private static final long MIN_BYTES_PER_SECOND = BYTES_PER_MB;
     private static final int LISTED = 3;
     private static final String PREFIX = "Top allocators: ";
     private static final String INDENT = String.format("%" + PREFIX.length() + "s", "");
@@ -20,7 +21,7 @@ final class Allocators
 
     /**
      * Returns the top allocators with their megabytes per second, or an empty list when the snapshot is not sampled,
-     * allocation is unavailable, or no thread reached {@link #MIN_BYTES_PER_SECOND}.
+     * allocation is unavailable, or no thread reached 1 MB per second.
      */
     static List<String> lines(JvmSnapshot snapshot) {
         if (!snapshot.sampled() || !snapshot.allocationAvailable) {
@@ -37,7 +38,7 @@ final class Allocators
 
         List<String> lines = new ArrayList<>();
         for (ThreadSnapshot thread : allocators.subList(0, Math.min(LISTED, allocators.size()))) {
-            long megabytesPerSecond = Math.round(thread.windowAllocatedBytes / seconds / (1024L * 1024L));
+            long megabytesPerSecond = Math.round(thread.windowAllocatedBytes / seconds / BYTES_PER_MB);
             lines.add((lines.isEmpty() ? PREFIX : INDENT)
                     + String.format(Locale.US, "%s %,d MB/s", thread.label(), megabytesPerSecond));
         }

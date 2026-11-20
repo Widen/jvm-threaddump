@@ -18,7 +18,7 @@ public class TestDump
     public void testJvmThreadDump() {
         JvmThreadDumpImpl out = new JvmThreadDumpImpl();
         String dump = out.generate();
-        assertThat(dump).contains("Memory: used/max");
+        assertThat(dump).contains("Memory: used/committed, used/max");
         assertThat(dump).contains("Deadlocked Threads: None");
         assertThat(dump).contains("file.encoding=UTF-8");
     }

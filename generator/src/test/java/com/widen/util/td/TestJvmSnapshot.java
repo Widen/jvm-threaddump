@@ -185,13 +185,18 @@ public class TestJvmSnapshot
 
     @Test
     void isNotSampledWhenInterruptedPartWayThroughTheWindow() {
-        FakeJvm jvm = new FakeJvm();
+        FakeJvm jvm = jvmWithCpuAndAllocation();
+        com.sun.management.OperatingSystemMXBean os = (com.sun.management.OperatingSystemMXBean) jvm.operatingSystem;
+        when(os.getSystemCpuLoad()).thenReturn(0.10, 0.95);
+        when(os.getProcessCpuLoad()).thenReturn(0.05, 0.40);
         jvm.interruptPauseAfter = Duration.ofMillis(250);
 
         JvmSnapshot snapshot = JvmSnapshot.read(jvm, Duration.ofSeconds(1));
 
         assertThat(snapshot.sampled()).isFalse();
         assertThat(snapshot.windowNanos).isEqualTo(0);
+        assertThat(snapshot.systemCpuLoad).isEqualTo(-1);
+        assertThat(snapshot.processCpuLoad).isEqualTo(-1);
         assertThat(Thread.interrupted()).isTrue();
     }
 

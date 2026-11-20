@@ -207,14 +207,19 @@ Details per check:
    first 3 thread names in dump order. Marks nothing; the group is too large to
    mark usefully.
 
-   A thread is **idle** when it is `WAITING`, `TIMED_WAITING`, or `RUNNABLE`
-   and every frame of its stack belongs to the JDK or to a server or pool
-   library, so no application code is on the stack. A `RUNNABLE` thread of that
-   kind is parked in native code, such as an event loop in `epoll_wait`. A
-   `BLOCKED` thread is never idle. The package prefixes are `java.`,
+   A thread is **idle** in one of three cases. It is `WAITING` or
+   `TIMED_WAITING` and every frame of its stack belongs to the JDK or to a
+   server or pool library, so no application code is on the stack. It is
+   `RUNNABLE` and its top frame's class and method name a known selector, poll,
+   or accept wait, whatever the frames below it, such as
+   `sun.nio.ch.EPoll.wait` under a Netty or XNIO event loop; the waits are one
+   set of `class#method` keys that covers the Linux, macOS, and Windows
+   selectors on Java 8 and later, the accept calls, and Netty's native
+   transports. Or its stack is empty. A `BLOCKED` thread is never idle. The
+   package prefixes of the library rule are `java.`,
    `javax.`, `jdk.`, `sun.`, `com.sun.`, `org.eclipse.jetty.`,
    `org.apache.tomcat.`, `org.apache.catalina.`, `io.netty.`, and
-   `com.zaxxer.hikari.`. A thread with an empty stack is idle.
+   `com.zaxxer.hikari.`.
 4. **Heap Full.** An old-generation pool is a heap pool whose name contains
    `Old` or `Tenured`, or the only heap pool the JVM reports, as with
    Shenandoah's `Shenandoah` pool and non-generational ZGC's `ZHeap`. Flag it

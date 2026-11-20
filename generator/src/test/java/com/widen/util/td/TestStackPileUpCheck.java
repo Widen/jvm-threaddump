@@ -116,6 +116,10 @@ public class TestStackPileUpCheck
                                 FakeThreads.frame("sun.nio.ch.EPollSelectorImpl", "doSelect"),
                                 FakeThreads.frame("io.netty.channel.nio.NioEventLoop", "run"),
                                 FakeThreads.frame("java.lang.Thread", "run"))),
+                arguments("idle XNIO workers", (Consumer<FakeJvm>) jvm ->
+                        addThreads(jvm, "xnio", 10, 1000, Thread.State.RUNNABLE,
+                                FakeThreads.frame("sun.nio.ch.EPoll", "wait"),
+                                FakeThreads.frame("org.xnio.nio.WorkerThread", "run"))),
                 arguments("an empty stack", (Consumer<FakeJvm>) jvm ->
                         addThreads(jvm, "w", 10, 1000, Thread.State.RUNNABLE)),
                 arguments("behind a lock pile-up", (Consumer<FakeJvm>) jvm -> {
@@ -154,20 +158,37 @@ public class TestStackPileUpCheck
             "WAITING,javax.a jdk.b sun.c com.sun.d org.eclipse.jetty.e org.apache.tomcat.f org.apache.catalina.g io.netty.h com.zaxxer.hikari.i,true",
             "WAITING,,true",
             "RUNNABLE,,true",
-            "RUNNABLE,sun.misc.Unsafe java.lang.Thread,true",
+            "RUNNABLE,sun.misc.Unsafe java.lang.Thread,false",
+            "RUNNABLE,sun.nio.ch.SocketDispatcher:write0 org.eclipse.jetty.io.ChannelEndPoint java.lang.Thread,false",
+            "RUNNABLE,sun.nio.ch.EPoll:wait io.netty.channel.nio.NioEventLoop java.lang.Thread,true",
+            "RUNNABLE,sun.nio.ch.EPoll:wait com.example.Dao java.lang.Thread,true",
+            "RUNNABLE,sun.nio.ch.EPollArrayWrapper:epollWait com.example.Dao,true",
+            "RUNNABLE,sun.nio.ch.EPoll:other com.example.Dao,false",
+            "BLOCKED,sun.nio.ch.EPoll:wait java.lang.Thread,false",
             "BLOCKED,sun.misc.Unsafe java.lang.Thread,false",
-            "RUNNABLE,sun.misc.Unsafe com.example.Dao java.lang.Thread,false",
             "WAITING,sun.misc.Unsafe com.example.Dao java.lang.Thread,false" })
-    void treatsAThreadWithOnlyLibraryFramesAsIdleUnlessItIsBlocked(Thread.State state, String classNames, boolean expectedIdle) {
+    void treatsAThreadAsIdleByItsStateAndFrames(Thread.State state, String frameKeys, boolean expectedIdle) {
         FakeJvm jvm = new FakeJvm();
-        String[] classes = classNames == null ? new String[0] : classNames.split(" ");
-        StackTraceElement[] frames = new StackTraceElement[classes.length];
-        for (int i = 0; i < classes.length; i++) {
-            frames[i] = FakeThreads.frame(classes[i], "m");
+        String[] keys = frameKeys == null ? new String[0] : frameKeys.split(" ");
+        StackTraceElement[] frames = new StackTraceElement[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            String[] classAndMethod = keys[i].split(":");
+            frames[i] = FakeThreads.frame(classAndMethod[0], classAndMethod.length > 1 ? classAndMethod[1] : "m");
         }
         jvm.addThread("t", 1000, state, frames);
 
         assertThat(StackPileUpCheck.idle(jvm.snapshot().threads.get(0))).isEqualTo(expectedIdle);
+    }
+
+    @Test
+    void flagsRunnableThreadsThatWriteToASocket() {
+        FakeJvm jvm = new FakeJvm();
+        addThreads(jvm, "jetty", 10, 1000, Thread.State.RUNNABLE,
+                FakeThreads.frame("sun.nio.ch.SocketDispatcher", "write0"),
+                FakeThreads.frame("org.eclipse.jetty.io.ChannelEndPoint", "flush"),
+                FakeThreads.frame("java.lang.Thread", "run"));
+
+        assertThat(findingsOf(jvm)).hasSize(1);
     }
 
     @Test

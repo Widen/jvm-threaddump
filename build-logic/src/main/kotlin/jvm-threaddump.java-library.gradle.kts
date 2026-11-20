@@ -8,6 +8,16 @@ fun jfrogCredential(name: String): String =
         ?: providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
         ?: throw GradleException("Set $name in the environment or in ~/.gradle/gradle.properties")
 
+fun MavenArtifactRepository.useJfrogCredentials() {
+    credentials {
+        username = jfrogCredential("ACQUIA_JFROG_USER")
+        password = jfrogCredential("ACQUIA_JFROG_TOKEN")
+    }
+    authentication {
+        create<BasicAuthentication>("basic")
+    }
+}
+
 val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
 
 java {
@@ -20,13 +30,7 @@ java {
 repositories {
     maven {
         url = uri("https://jfrog.ais.acquia.io/artifactory/widen-java-virtual/")
-        credentials {
-            username = jfrogCredential("ACQUIA_JFROG_USER")
-            password = jfrogCredential("ACQUIA_JFROG_TOKEN")
-        }
-        authentication {
-            create<BasicAuthentication>("basic")
-        }
+        useJfrogCredentials()
     }
 }
 
@@ -44,22 +48,16 @@ tasks.test {
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {
-            artifactId = project.name
             from(components["java"])
         }
     }
     repositories {
         maven {
             name = "jfrog"
-            val repository = if (project.version.toString().endsWith("-SNAPSHOT")) "libs-snapshots-local" else "libs-releases-local"
+            val isSnapshot = project.version.toString().endsWith("-SNAPSHOT")
+            val repository = if (isSnapshot) "libs-snapshots-local" else "libs-releases-local"
             url = uri("https://jfrog.ais.acquia.io/artifactory/$repository")
-            credentials {
-                username = jfrogCredential("ACQUIA_JFROG_USER")
-                password = jfrogCredential("ACQUIA_JFROG_TOKEN")
-            }
-            authentication {
-                create<BasicAuthentication>("basic")
-            }
+            useJfrogCredentials()
         }
     }
 }

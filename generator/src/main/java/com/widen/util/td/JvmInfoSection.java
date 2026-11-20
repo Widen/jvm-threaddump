@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.TimeZone;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.widen.util.td.BytesUtils.byteCountToDisplaySize;
@@ -28,7 +29,9 @@ import static java.lang.String.format;
 final class JvmInfoSection
 {
     private static final String MASK = "****";
-    private static final List<String> SECRET_WORDS = Arrays.asList("password", "secret", "token", "credential", "key");
+    private static final List<String> SECRET_WORDS = Arrays.asList(
+            "password", "pass", "pwd", "secret", "token", "credential", "key");
+    private static final Pattern URL_PASSWORD = Pattern.compile("://[^/@:]*:[^/@]*@");
 
     private final JvmSources jvm;
     private final List<String> mainArguments;
@@ -93,7 +96,8 @@ final class JvmInfoSection
 
     /**
      * Masks the value of a {@code key=value} system property that may hold a secret: the key names one, or the value
-     * holds {@code word=} for one (as in a JDBC URL or an options string). A property without {@code =} is unchanged.
+     * holds {@code word=} for one (as in a JDBC URL or an options string), or the value holds a URL password
+     * ({@code ://user:password@}). A property without {@code =} is unchanged.
      *
      * @param property the property without its {@code -D} prefix
      */
@@ -104,7 +108,7 @@ final class JvmInfoSection
         }
         String key = property.substring(0, separator);
         String value = property.substring(separator + 1);
-        if (containsSecretWord(key, "") || containsSecretWord(value, "=")) {
+        if (containsSecretWord(key, "") || containsSecretWord(value, "=") || URL_PASSWORD.matcher(value).find()) {
             return key + "=" + MASK;
         }
         return property;

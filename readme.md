@@ -132,8 +132,9 @@ public class ThreadDumpRegistration implements ServletContextListener
 - `System Uptime`: Linux only; parsed from file `/proc/uptime`
 - `Main Arguments`: Empty unless the builder sets `mainArguments`.
 - `JVM System Props`: The `-D` values print as `****` when the key contains
-  `password`, `secret`, `token`, `credential`, or `key`, or when the value
-  contains one of those words followed by `=`.
+  `password`, `pass`, `pwd`, `secret`, `token`, `credential`, or `key`, when the
+  value contains one of those words followed by `=`, or when the value holds a
+  URL password (`://user:password@` before the next `/`).
 
 ## Example Output
 

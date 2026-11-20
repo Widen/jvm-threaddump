@@ -110,6 +110,12 @@ public class TestStackPileUpCheck
         return Stream.of(
                 arguments("idle Jetty workers", (Consumer<FakeJvm>) jvm ->
                         addThreads(jvm, "w", 10, 1000, Thread.State.WAITING, IDLE_JETTY_STACK)),
+                arguments("idle Netty event loops", (Consumer<FakeJvm>) jvm ->
+                        addThreads(jvm, "loop", 10, 1000, Thread.State.RUNNABLE,
+                                FakeThreads.frame("sun.nio.ch.EPoll", "wait"),
+                                FakeThreads.frame("sun.nio.ch.EPollSelectorImpl", "doSelect"),
+                                FakeThreads.frame("io.netty.channel.nio.NioEventLoop", "run"),
+                                FakeThreads.frame("java.lang.Thread", "run"))),
                 arguments("an empty stack", (Consumer<FakeJvm>) jvm ->
                         addThreads(jvm, "w", 10, 1000, Thread.State.RUNNABLE)),
                 arguments("behind a lock pile-up", (Consumer<FakeJvm>) jvm -> {
@@ -148,10 +154,11 @@ public class TestStackPileUpCheck
             "WAITING,javax.a jdk.b sun.c com.sun.d org.eclipse.jetty.e org.apache.tomcat.f org.apache.catalina.g io.netty.h com.zaxxer.hikari.i,true",
             "WAITING,,true",
             "RUNNABLE,,true",
-            "RUNNABLE,sun.misc.Unsafe java.lang.Thread,false",
+            "RUNNABLE,sun.misc.Unsafe java.lang.Thread,true",
             "BLOCKED,sun.misc.Unsafe java.lang.Thread,false",
+            "RUNNABLE,sun.misc.Unsafe com.example.Dao java.lang.Thread,false",
             "WAITING,sun.misc.Unsafe com.example.Dao java.lang.Thread,false" })
-    void treatsAWaitingThreadWithOnlyLibraryFramesAsIdle(Thread.State state, String classNames, boolean expectedIdle) {
+    void treatsAThreadWithOnlyLibraryFramesAsIdleUnlessItIsBlocked(Thread.State state, String classNames, boolean expectedIdle) {
         FakeJvm jvm = new FakeJvm();
         String[] classes = classNames == null ? new String[0] : classNames.split(" ");
         StackTraceElement[] frames = new StackTraceElement[classes.length];

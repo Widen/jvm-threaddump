@@ -207,9 +207,11 @@ Details per check:
    first 3 thread names in dump order. Marks nothing; the group is too large to
    mark usefully.
 
-   A thread is **idle** when it is `WAITING` or `TIMED_WAITING` and every frame
-   of its stack belongs to the JDK or to a server or pool library, so no
-   application code is on the stack. The package prefixes are `java.`,
+   A thread is **idle** when it is `WAITING`, `TIMED_WAITING`, or `RUNNABLE`
+   and every frame of its stack belongs to the JDK or to a server or pool
+   library, so no application code is on the stack. A `RUNNABLE` thread of that
+   kind is parked in native code, such as an event loop in `epoll_wait`. A
+   `BLOCKED` thread is never idle. The package prefixes are `java.`,
    `javax.`, `jdk.`, `sun.`, `com.sun.`, `org.eclipse.jetty.`,
    `org.apache.tomcat.`, `org.apache.catalina.`, `io.netty.`, and
    `com.zaxxer.hikari.`. A thread with an empty stack is idle.

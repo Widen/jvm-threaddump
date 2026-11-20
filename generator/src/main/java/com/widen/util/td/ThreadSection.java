@@ -2,8 +2,12 @@ package com.widen.util.td;
 
 import java.lang.management.ThreadInfo;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import static com.widen.util.td.Line.BlankLine;
 import static com.widen.util.td.Line.SimpleLine;
@@ -16,33 +20,65 @@ import static java.lang.String.format;
 final class ThreadSection
 {
     private final JvmSnapshot snapshot;
+    private final boolean allFrames;
 
-    ThreadSection(JvmSnapshot snapshot) {
+    ThreadSection(JvmSnapshot snapshot, boolean allFrames) {
         this.snapshot = snapshot;
+        this.allFrames = allFrames;
     }
 
     List<Line> lines() {
         List<Line> lines = new ArrayList<>();
-        lines.add(new TitledLine("Thread Count", String.valueOf(snapshot.threads.size())));
+        String count = String.valueOf(snapshot.threads.size());
+        if (!snapshot.threads.isEmpty()) {
+            count += " (" + formatStateCounts(snapshot.threads) + ")";
+        }
+        lines.add(new TitledLine("Thread Count", count));
         lines.add(new BlankLine());
         for (ThreadSnapshot thread : snapshot.threads) {
             lines.add(new SimpleLine(formatHeader(thread)));
-            for (StackTraceElement frame : thread.stack()) {
+            StackTraceElement[] stack = thread.stack();
+            List<StackTraceElement> shown = allFrames ? Arrays.asList(stack) : StackFilter.kept(stack);
+            for (StackTraceElement frame : shown) {
                 lines.add(new SimpleLine(formatFrame(frame)));
+            }
+            int hiddenCount = stack.length - shown.size();
+            if (hiddenCount > 0) {
+                lines.add(new SimpleLine("    ... " + hiddenCount + (hiddenCount == 1 ? " frame" : " frames")
+                        + " hidden"));
             }
             lines.add(new BlankLine());
         }
         return lines;
     }
 
-    private static String formatHeader(ThreadSnapshot snapshot) {
-        Thread thread = snapshot.thread;
-        ThreadInfo info = snapshot.info;
-        String name = snapshot.name;
-        ThreadGroup group = thread.getThreadGroup();
+    /**
+     * Counts the threads per state, such as {@code 12 RUNNABLE, 43 BLOCKED}, in {@link Thread.State} order and
+     * without the states that have no threads.
+     */
+    static String formatStateCounts(Collection<ThreadSnapshot> threads) {
+        Map<Thread.State, Integer> counts = new EnumMap<>(Thread.State.class);
+        for (ThreadSnapshot thread : threads) {
+            counts.merge(thread.state(), 1, Integer::sum);
+        }
+        StringBuilder text = new StringBuilder();
+        for (Map.Entry<Thread.State, Integer> entry : counts.entrySet()) {
+            if (text.length() > 0) {
+                text.append(", ");
+            }
+            text.append(entry.getValue()).append(' ').append(entry.getKey());
+        }
+        return text.toString();
+    }
+
+    private static String formatHeader(ThreadSnapshot thread) {
+        Thread liveThread = thread.thread;
+        ThreadInfo info = thread.info;
+        String name = thread.name;
+        ThreadGroup group = liveThread.getThreadGroup();
         StringBuilder header = new StringBuilder(format(Locale.US, "\"%s\"%s priority=%d id=0x%x group=%s cpu=%s block_cnt=%d wait_cnt=%d %s",
-                name, thread.isDaemon() ? " daemon" : "", thread.getPriority(), thread.getId(),
-                group == null ? "-DEAD-" : group.getName(), formatCpuTime(snapshot.cpuNanos), info.getBlockedCount(),
+                name, liveThread.isDaemon() ? " daemon" : "", liveThread.getPriority(), liveThread.getId(),
+                group == null ? "-DEAD-" : group.getName(), formatCpuTime(thread.cpuNanos), info.getBlockedCount(),
                 info.getWaitedCount(), info.getThreadState()));
 
         long lockOwnerId = info.getLockOwnerId();
@@ -56,7 +92,7 @@ final class ThreadSection
         }
 
         // skip the standard Thread.toString() and a toString() that repeats the name
-        String threadToString = snapshot.toString;
+        String threadToString = thread.toString;
         if (threadToString != null && !threadToString.startsWith("Thread[") && !threadToString.equalsIgnoreCase(name)) {
             header.append(format(" (%s)", threadToString));
         }

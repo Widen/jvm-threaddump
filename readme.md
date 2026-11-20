@@ -4,6 +4,9 @@ This project formats JVM info as simple text. It works well as a zero-configurat
 
 There are no classpath dependencies; all utility classes are included and package private.
 
+The servlet module does not bring in the Servlet API. The servlet container or
+your application must supply `javax.servlet:javax.servlet-api` 3.0.1 or later.
+
 ## Usage
 
 Direct instantiation:

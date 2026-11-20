@@ -159,7 +159,7 @@ first. Within one check, the largest group or the highest figure prints first.
 | 3 | Stack Pile-up | no | 10 or more threads that are not idle are stuck in the same call |
 | 4 | Heap Full | no | an old-generation pool holds 90% or more of its max now, and held 90% or more after its last collection |
 | 5 | Metadata Full | no | Metaspace, Compressed Class Space, or a code pool holds 90% or more of a defined max |
-| 6 | GC Overhead | uses it | GC took 25% or more of the window and at least 500 ms, or 10% or more of JVM uptime |
+| 6 | GC Overhead | uses it | GC took 25% or more of the window and at least 500 ms, or 10% or more of JVM uptime after the first 5 minutes |
 | 7 | CPU Saturated | uses it | system CPU load is 0.90 or higher |
 | 8 | File Descriptors | no | open descriptors are 90% or more of the limit |
 | 9 | Hot Threads | yes | a thread used 50% or more of one core during the window |
@@ -239,8 +239,10 @@ Details per check:
    the window's elapsed time and at least 500 ms. The 500 ms floor keeps one
    ordinary pause from flagging a one-second window. Print the percentage, the
    number of collections, and the top 3 allocating threads. The lifetime
-   measure, used always: total collection time is 10% or more of JVM uptime,
-   labeled as an average since the JVM started. Collectors that report
+   measure, used with or without a window once the JVM has been up for 5
+   minutes (300,000 ms): total collection time is 10% or more of JVM uptime,
+   labeled as an average since the JVM started. Startup collections make the
+   average of a younger JVM misleading. Collectors that report
    concurrent work instead of pauses are left out of both sums: those whose
    name contains `Cycles` or `Concurrent`. Marks the `GC` lines of the
    collectors that ran in the window when the window measure flagged, and all
@@ -455,7 +457,8 @@ These were the designer's calls, not decisions made together:
 - Threads inside `Object.wait()` do not count as waiting on a lock.
 - Stack Pile-up groups by the top frame and the first frame outside the JDK.
 - GC Overhead needs at least 500 ms of collection in the window, and the
-  lifetime measure also runs when a window is set.
+  lifetime measure also runs when a window is set and the JVM has been up for 5
+  minutes.
 - CPU Saturated runs with a zero window on the load since the previous caller,
   and accepts that another caller can shorten the span a window covers.
 - The servlet takes whole seconds only, limits the window to 30 seconds, and

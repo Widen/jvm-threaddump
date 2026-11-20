@@ -9,7 +9,8 @@ import java.util.Set;
 
 /**
  * Flags a JVM that spends much of its time collecting garbage, measured over the sampling window and over the JVM's
- * lifetime. Collectors that report concurrent work instead of pauses are left out of both measures.
+ * lifetime once the JVM has run for five minutes, because startup collections make a younger JVM's average
+ * misleading. Collectors that report concurrent work instead of pauses are left out of both measures.
  */
 final class GcOverheadCheck implements Check
 {
@@ -17,6 +18,7 @@ final class GcOverheadCheck implements Check
     static final int MIN_WINDOW_PERCENT = 25;
     static final long MIN_WINDOW_GC_MILLIS = 500;
     static final int MIN_LIFETIME_PERCENT = 10;
+    static final long MIN_LIFETIME_UPTIME_MILLIS = 300_000;
 
     @Override
     public boolean applies(JvmSnapshot snapshot) {
@@ -63,7 +65,7 @@ final class GcOverheadCheck implements Check
             lifetimeMillis += Math.max(0, gc.timeMillis);
         }
         long uptimeMillis = snapshot.uptimeMillis;
-        if (uptimeMillis > 0 && lifetimeMillis * 100 >= MIN_LIFETIME_PERCENT * uptimeMillis) {
+        if (uptimeMillis >= MIN_LIFETIME_UPTIME_MILLIS && lifetimeMillis * 100 >= MIN_LIFETIME_PERCENT * uptimeMillis) {
             lines.add(String.format(Locale.US, "GC has taken %d%% of JVM uptime, an average since the JVM started",
                     lifetimeMillis * 100 / uptimeMillis));
             if (!windowFlagged) {

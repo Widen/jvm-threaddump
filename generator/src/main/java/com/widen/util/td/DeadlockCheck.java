@@ -20,7 +20,7 @@ final class DeadlockCheck implements Check
 
     @Override
     public List<Finding> findings(JvmSnapshot snapshot) {
-        if (snapshot.deadlockedIds.length == 0) {
+        if (snapshot.deadlockedThreadIds().isEmpty()) {
             return Collections.emptyList();
         }
         LockGraph locks = snapshot.locks();
@@ -59,8 +59,8 @@ final class DeadlockCheck implements Check
     private static Finding jvmReport(JvmSnapshot snapshot) {
         List<String> lines = new ArrayList<>();
         List<String> marks = new ArrayList<>();
-        lines.add(snapshot.deadlockedIds.length + " threads are deadlocked, by the JVM's report");
-        for (long id : snapshot.deadlockedIds) {
+        lines.add(snapshot.deadlockedThreadIds().size() + " threads are deadlocked, by the JVM's report");
+        for (long id : snapshot.deadlockedThreadIds()) {
             ThreadSnapshot thread = snapshot.thread(id);
             if (thread == null) {
                 lines.add("thread 0x" + Long.toHexString(id));

@@ -26,6 +26,6 @@ final class CpuSaturatedCheck implements Check
         String line = String.format(Locale.US, "system CPU load is %.2f; this JVM uses %.2f (0.0 to 1.0)",
                 snapshot.systemCpuLoad, snapshot.processCpuLoad);
         return Collections.singletonList(
-                new Finding(TITLE, Collections.singletonList(line), Collections.singletonList(Finding.lineMark("CPU Load"))));
+                new Finding(TITLE, Collections.singletonList(line), Collections.singletonList(Finding.lineMark(JvmInfoSection.CPU_LOAD))));
     }
 }

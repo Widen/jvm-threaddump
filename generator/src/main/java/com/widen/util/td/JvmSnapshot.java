@@ -77,8 +77,9 @@ final class JvmSnapshot
 
     /**
      * Reads the JVM, pausing for {@code window} between a start and an end reading when it is above zero. A thread
-     * that is already interrupted skips the window. An interrupt during the pause ends it early. Either way the
-     * interrupt flag stays set, and the snapshot counts as sampled only when time passed.
+     * that is already interrupted skips the window. An interrupt during the pause ends it early and leaves the
+     * snapshot not sampled, because a rate over a partial window misleads. Either way the interrupt flag stays set.
+     * The snapshot also counts as not sampled when no time passed.
      */
     static JvmSnapshot read(JvmSources jvm, Duration window) {
         ThreadMXBean threadBean = jvm.threads();
@@ -99,11 +100,11 @@ final class JvmSnapshot
                     sunOs);
             try {
                 jvm.pause(window);
+                windowNanos = jvm.nanoTime() - startNanos;
             }
             catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            windowNanos = jvm.nanoTime() - startNanos;
         }
         boolean sampled = windowNanos > 0;
 

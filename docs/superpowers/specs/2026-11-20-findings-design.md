@@ -156,7 +156,7 @@ first. Within one check, the largest group or the highest figure prints first.
 | --- | --- | --- | --- |
 | 1 | Deadlock | no | `findDeadlockedThreads()` reports threads |
 | 2 | Lock Pile-up | no | 5 or more threads wait on locks that lead back to one holder |
-| 3 | Stack Pile-up | no | 10 or more threads that are not idle are stuck in the same call |
+| 3 | Stack Pile-up | no | 10 or more threads that are not idle are in the same call |
 | 4 | Heap Full | no | an old-generation pool holds 90% or more of its max now, and held 90% or more after its last collection |
 | 5 | Metadata Full | no | Metaspace, Compressed Class Space, or a code pool holds 90% or more of a defined max |
 | 6 | GC Overhead | uses it | GC took 25% or more of the window and at least 500 ms, or 10% or more of JVM uptime after the first 5 minutes |

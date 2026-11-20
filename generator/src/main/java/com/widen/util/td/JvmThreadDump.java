@@ -69,8 +69,8 @@ public final class JvmThreadDump
 
     /**
      * Reads the JVM and returns the report. The call blocks for the sample window, one second by default, to measure
-     * what the threads and collectors do meanwhile. An interrupt ends the wait early and leaves the thread's interrupt
-     * flag set.
+     * what the threads and collectors do meanwhile. An interrupt during the window ends the wait, leaves the thread's
+     * interrupt flag set, and produces a dump that is not sampled: no window rates, no Hot Threads, and no CPU load.
      */
     public String generate() {
         JvmSnapshot snapshot = JvmSnapshot.read(jvm, sampleWindow);

@@ -8,19 +8,15 @@ public class TestDump
 {
 
     @Test
-    public void dumpToStdOut() {
-        JvmThreadDumpImpl out = new JvmThreadDumpImpl();
-        String dump = out.generate();
-        System.out.println(dump);
-    }
-
-    @Test
-    public void testJvmThreadDump() {
-        JvmThreadDumpImpl out = new JvmThreadDumpImpl();
-        String dump = out.generate();
-        assertThat(dump).contains("Memory: used/max");
-        assertThat(dump).contains("Deadlocked Threads: None");
-        assertThat(dump).contains("file.encoding=UTF-8");
+    void printsEverySectionOfTheRunningJvm() {
+        assertThat(JvmThreadDump.create().generate())
+                .contains("Current Time: ")
+                .contains("JVM Free Memory: ")
+                .contains("Memory: used/committed, used/max")
+                .contains("GC ")
+                .contains("Deadlocked Threads: None")
+                .contains("Thread Count: ")
+                .contains("\"" + Thread.currentThread().getName() + "\"");
     }
 
 }

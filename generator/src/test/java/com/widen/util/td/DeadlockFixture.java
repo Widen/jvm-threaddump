@@ -58,14 +58,32 @@ final class DeadlockFixture implements AutoCloseable
         return new long[] {threadOne.getId(), threadTwo.getId()};
     }
 
-    /** Interrupts both threads, which release their locks and exit, and waits for them to finish. */
+    /**
+     * Interrupts both threads, which release their locks and exit, and waits for them to finish.
+     * Joins even when the caller's interrupt flag is set, and restores the flag afterward.
+     *
+     * @throws IllegalStateException if a thread is still alive 5 seconds after its interrupt
+     */
     @Override
     public void close()
     {
         threadOne.interrupt();
         threadTwo.interrupt();
-        join(threadOne);
-        join(threadTwo);
+        boolean callerInterrupted = Thread.interrupted();
+        try
+        {
+            callerInterrupted |= join(threadOne);
+            callerInterrupted |= join(threadTwo);
+        }
+        finally
+        {
+            if (callerInterrupted)
+            {
+                Thread.currentThread().interrupt();
+            }
+        }
+        requireExited(threadOne);
+        requireExited(threadTwo);
     }
 
     private void awaitDeadlock()
@@ -111,15 +129,32 @@ final class DeadlockFixture implements AutoCloseable
         }
     }
 
-    private static void join(Thread thread)
+    /** Waits up to the timeout for the thread to exit, retrying after an interrupt; returns whether one occurred. */
+    private static boolean join(Thread thread)
     {
-        try
+        boolean interrupted = false;
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(TIMEOUT_MILLIS);
+        long remainingMillis = TIMEOUT_MILLIS;
+        while (thread.isAlive() && remainingMillis > 0)
         {
-            thread.join(TIMEOUT_MILLIS);
+            try
+            {
+                thread.join(remainingMillis);
+            }
+            catch (InterruptedException e)
+            {
+                interrupted = true;
+            }
+            remainingMillis = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
         }
-        catch (InterruptedException e)
+        return interrupted;
+    }
+
+    private static void requireExited(Thread thread)
+    {
+        if (thread.isAlive())
         {
-            Thread.currentThread().interrupt();
+            throw new IllegalStateException(thread.getName() + " did not exit within " + TIMEOUT_MILLIS + " ms");
         }
     }
 

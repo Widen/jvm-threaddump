@@ -29,9 +29,14 @@ subprojects {
 
     configure<JavaPluginExtension> {
         toolchain {
-            languageVersion = JavaLanguageVersion.of(8)
+            languageVersion = JavaLanguageVersion.of(17)
         }
         withSourcesJar()
+    }
+
+    // Compile on 17 for Java 8, so the JARs load on Java 8 and testOnJava8 can run the tests there.
+    tasks.withType<JavaCompile>().configureEach {
+        options.release = 8
     }
 
     // With JFrog credentials, resolve through Acquia's proxy; without them, from Maven Central.
@@ -53,8 +58,23 @@ subprojects {
         "testRuntimeOnly"(catalog.junit.launcher)
     }
 
-    tasks.named<Test>("test") {
+    tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+    }
+
+    val testSourceSet = the<SourceSetContainer>()["test"]
+    val java8Launcher = the<JavaToolchainService>().launcherFor {
+        languageVersion = JavaLanguageVersion.of(8)
+    }
+    val testOnJava8 = tasks.register<Test>("testOnJava8") {
+        description = "Runs the tests on a Java 8 JVM."
+        group = LifecycleBasePlugin.VERIFICATION_GROUP
+        testClassesDirs = testSourceSet.output.classesDirs
+        classpath = testSourceSet.runtimeClasspath
+        javaLauncher = java8Launcher
+    }
+    tasks.named("check") {
+        dependsOn(testOnJava8)
     }
 
     configure<PublishingExtension> {

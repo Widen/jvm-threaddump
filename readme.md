@@ -1,6 +1,7 @@
 # Simple JVM Thread Dump
 
-This project formats JVM info as simple text. It works well as a zero-configuration debugging tool for web-based applications.
+This project formats JVM info as simple text. It works well as a
+zero-configuration debugging tool for web-based applications.
 
 The generator module has no dependencies; all utility classes are included and
 package private.
@@ -44,10 +45,14 @@ Overridable methods for customization:
 - `List<String> getMainArguments()`
   - The default method returns an empty list.
 - `Map<String, Object> getCustomValues()`
-  - Useful if you have environment specific information to aid in debugging the application.
-  - `String.valueOf(...)` is used to generate a text representation of the value Object.
+  - Useful if you have environment specific information to aid in debugging the
+    application.
+  - `String.valueOf(...)` is used to generate a text representation of the value
+    Object.
 
-The supplied servlet does not support using a custom `JvmThreadDump` class. We recommend that you copy `ThreadDumpServlet.java` into your source tree and modify as required.
+The supplied servlet does not support using a custom `JvmThreadDump` class. We
+recommend that you copy `ThreadDumpServlet.java` into your source tree and
+modify as required.
 
 ```text
 public class MyAppThreadDumpServlet extends HttpServlet
@@ -108,10 +113,12 @@ public class MyAppThreadDumpServlet extends HttpServlet
 ## Glossary
 
 - `Hostname`: `System.getenv('HOSTNAME')`
-- `CPU Load`: [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
-[JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)
+- `CPU Load`:
+  [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
+  [JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)
 - `System Uptime`: Linux only; parsed from file `/proc/uptime`
-- `Main Arguments`: Will be empty unless you override and implement `getMainArguments()`.
+- `Main Arguments`: Will be empty unless you override and implement
+  `getMainArguments()`.
 
 ## Example Output
 
@@ -222,15 +229,18 @@ Compressed Class Space: 81%/0%        init=0 bytes     used=827 KB      commit=1
 
 ## Build
 
-Install the tools, then run the tests:
+Install the tools, then run the tests on Java 17 and Java 8:
 
 ```sh
 mise install
-./gradlew test
+./gradlew check
 ```
 
-`mise.toml` pins Java 21, which runs Gradle. The build compiles and tests with
-a Java 8 toolchain. Gradle downloads a Java 8 JDK when none is installed.
+`mise.toml` installs Java 21, which runs Gradle, and Corretto 8, which it
+exposes to Gradle through the `JDK8` variable. The build compiles with a Java
+17 toolchain and `--release 8`, so the JARs run on Java 8 and later. `test`
+runs the tests on Java 17, and `testOnJava8` runs them on Java 8. Gradle
+downloads a missing JDK.
 
 When the JFrog credentials described below are set, dependencies resolve
 through the Acquia JFrog `widen-java-virtual` repository. Without them,

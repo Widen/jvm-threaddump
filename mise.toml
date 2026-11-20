@@ -1,2 +1,6 @@
 [tools]
-java = "21"
+# The first entry runs Gradle; corretto-8 is installed for Gradle's toolchain detection.
+java = ["21", "corretto-8"]
+
+[env]
+JDK8 = "{{env.HOME}}/.local/share/mise/installs/java/corretto-8"

@@ -16,7 +16,7 @@ public class TestDump
                 .contains("GC ")
                 .contains("Deadlocked Threads: None")
                 .contains("Thread Count: ")
-                .contains("\"Test worker\"");
+                .contains("\"" + Thread.currentThread().getName() + "\"");
     }
 
 }

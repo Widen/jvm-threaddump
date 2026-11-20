@@ -1,9 +1,8 @@
 package com.widen.util.td;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.junit.Assert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestDump
 {
@@ -19,9 +18,9 @@ public class TestDump
     public void testJvmThreadDump() {
         JvmThreadDumpImpl out = new JvmThreadDumpImpl();
         String dump = out.generate();
-        assertThat(dump, containsString("Memory: used/max"));
-        assertThat(dump, containsString("Deadlocked Threads: None"));
-        assertThat(dump, containsString("file.encoding=UTF-8"));
+        assertThat(dump).contains("Memory: used/max");
+        assertThat(dump).contains("Deadlocked Threads: None");
+        assertThat(dump).contains("file.encoding=UTF-8");
     }
 
 }

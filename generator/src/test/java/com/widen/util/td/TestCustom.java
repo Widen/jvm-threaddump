@@ -5,10 +5,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.junit.Assert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestCustom
 {
@@ -40,9 +39,9 @@ public class TestCustom
     public void testJvmThreadDump() {
         JvmThreadDumpImpl out = new CustomImpl();
         String dump = out.generate();
-        assertThat(dump, containsString("Hello: World"));
-        assertThat(dump, containsString("Blah: Custom toString..."));
-        assertThat(dump, containsString("Main Arguments: foo blah"));
+        assertThat(dump).contains("Hello: World");
+        assertThat(dump).contains("Blah: Custom toString...");
+        assertThat(dump).contains("Main Arguments: foo blah");
         System.out.println(dump);
     }
 

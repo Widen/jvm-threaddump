@@ -1,22 +1,35 @@
 package com.widen.util.td;
 
-import org.junit.Test;
+import java.util.Arrays;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.not;
-import static org.junit.Assert.assertThat;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestDeadlock
 {
+    private static final Pattern DEADLOCKED_LINE = Pattern.compile("^ *Deadlocked Threads: (.*)$", Pattern.MULTILINE);
 
     @Test
-    public void testDeadlockThreadDump() throws InterruptedException {
-        DeadlockThread.startThreads();
-        Thread.sleep(1000);
-        JvmThreadDumpImpl out = new JvmThreadDumpImpl();
-        String dump = out.generate();
-        assertThat(dump, containsString("Memory: used/max"));
-        assertThat(dump, not(containsString("Deadlocked Threads: None")));
+    void reportsDeadlockedThreadsAndClearsThemAfterward() throws Exception {
+        try (DeadlockFixture deadlock = DeadlockFixture.start()) {
+            String dump = new JvmThreadDumpImpl().generate();
+            String[] fixtureIds = Arrays.stream(deadlock.threadIds())
+                    .mapToObj(id -> "0x" + Long.toHexString(id))
+                    .toArray(String[]::new);
+            assertThat(deadlockedThreadIds(dump)).contains(fixtureIds);
+        }
+        assertThat(new JvmThreadDumpImpl().generate())
+                .contains("Deadlocked Threads: None");
+    }
+
+    private static List<String> deadlockedThreadIds(String dump) {
+        Matcher line = DEADLOCKED_LINE.matcher(dump);
+        assertThat(line.find()).as("a Deadlocked Threads line in the dump").isTrue();
+        return Arrays.asList(line.group(1).trim().split(", "));
     }
 
 }

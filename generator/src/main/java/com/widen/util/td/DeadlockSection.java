@@ -18,11 +18,12 @@ final class DeadlockSection
     }
 
     List<Line> lines() {
+        List<Long> ids = snapshot.locks().deadlockedIds();
         List<String> labels = new ArrayList<>();
-        if (snapshot.deadlockedThreadIds().isEmpty()) {
+        if (ids.isEmpty()) {
             labels.add("None");
         }
-        for (long id : snapshot.deadlockedThreadIds()) {
+        for (long id : ids) {
             ThreadSnapshot thread = snapshot.thread(id);
             labels.add(thread == null ? "0x" + Long.toHexString(id) : thread.label());
         }

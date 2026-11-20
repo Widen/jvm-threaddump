@@ -84,6 +84,31 @@ public class TestLockPileUpCheck
     }
 
     @Test
+    void ordersPileUpsOfEqualSizeByTheHoldersDumpPosition() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("b-holder", 10, Thread.State.RUNNABLE);
+        jvm.addThread("a-holder", 20, Thread.State.RUNNABLE);
+        addWaiters(jvm, 5, 10);
+        addWaiters(jvm, 5, 20);
+
+        assertThat(findingsOf(jvm)).extracting(finding -> finding.lines.get(0)).containsExactly(
+                "5 threads wait on a lock held by \"a-holder\" (0x14, RUNNABLE)",
+                "5 threads wait on a lock held by \"b-holder\" (0xa, RUNNABLE)");
+    }
+
+    @Test
+    void sortsAMissingHolderAfterAnEqualPileUpWithAHolderInTheDump() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("h", 10, Thread.State.RUNNABLE);
+        addWaiters(jvm, 5, 1);
+        addWaiters(jvm, 5, 10);
+
+        assertThat(findingsOf(jvm)).extracting(finding -> finding.lines.get(0)).containsExactly(
+                "5 threads wait on a lock held by \"h\" (0xa, RUNNABLE)",
+                "5 threads wait on a lock held by thread 0x1, which is not in the dump");
+    }
+
+    @Test
     void leavesDeadlocksToTheDeadlockCheck() {
         FakeJvm jvm = new FakeJvm();
         jvm.addThreadWaitingOn("a", 1, Thread.State.BLOCKED, 2, null);

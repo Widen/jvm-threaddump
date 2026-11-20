@@ -20,15 +20,15 @@ final class DeadlockCheck implements Check
 
     @Override
     public List<Finding> findings(JvmSnapshot snapshot) {
-        if (snapshot.deadlockedThreadIds().isEmpty()) {
+        LockGraph locks = snapshot.locks();
+        if (locks.deadlockedIds().isEmpty()) {
             return Collections.emptyList();
         }
-        LockGraph locks = snapshot.locks();
-        if (locks.cycles().isEmpty()) {
+        if (locks.deadlockCycles().isEmpty()) {
             return Collections.singletonList(jvmReport(snapshot));
         }
         List<Finding> findings = new ArrayList<>();
-        for (List<ThreadSnapshot> cycle : locks.cycles()) {
+        for (List<ThreadSnapshot> cycle : locks.deadlockCycles()) {
             findings.add(cycleFinding(cycle, locks.behind(cycle).size()));
         }
         return findings;
@@ -59,8 +59,9 @@ final class DeadlockCheck implements Check
     private static Finding jvmReport(JvmSnapshot snapshot) {
         List<String> lines = new ArrayList<>();
         List<String> marks = new ArrayList<>();
-        lines.add(snapshot.deadlockedThreadIds().size() + " threads are deadlocked, by the JVM's report");
-        for (long id : snapshot.deadlockedThreadIds()) {
+        List<Long> ids = snapshot.locks().deadlockedIds();
+        lines.add(ids.size() + " threads are deadlocked, by the JVM's report");
+        for (long id : ids) {
             ThreadSnapshot thread = snapshot.thread(id);
             if (thread == null) {
                 lines.add("thread 0x" + Long.toHexString(id));

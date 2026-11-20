@@ -155,7 +155,7 @@ public class ThreadDumpRegistration implements ServletContextListener
       Operating System: Mac OS X (10.14.2)
      System Processors: 12 x86_64
          System Memory: 2,017 MB available; 32,768 MB total
-              CPU Load: 0.0000 system; 0.0000 jvm
+              CPU Load: 0.0000 system; 0.0000 jvm (0.0 to 1.0)
          System Uptime: Not Available
       System Idle Time: Not Available
             JVM Uptime: 0 days, 0:00:00

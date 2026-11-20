@@ -4,15 +4,15 @@ plugins {
 }
 
 fun jfrogCredential(name: String): String =
-    providers.environmentVariable(name).orNull
-        ?: providers.gradleProperty(name).orNull
+    providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
+        ?: providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
         ?: throw GradleException("Set $name in the environment or in ~/.gradle/gradle.properties")
 
 val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(8))
+        languageVersion = JavaLanguageVersion.of(8)
     }
     withSourcesJar()
 }

@@ -232,16 +232,20 @@ mise install
 `mise.toml` pins Java 21, which runs Gradle. The build compiles and tests with
 a Java 8 toolchain. Gradle downloads a Java 8 JDK when none is installed.
 
-Every build resolves dependencies from the JFrog `widen-java-virtual`
-repository, so every build needs the credentials in `ACQUIA_JFROG_USER` and
-`ACQUIA_JFROG_TOKEN`. Set them as environment variables, or as Gradle
-properties of the same names, for example in `~/.gradle/gradle.properties`.
+Dependencies resolve from Maven Central, so building and testing need no
+credentials.
 
-The version lives in `gradle.properties`. To publish, run:
+The version lives in `gradle.properties`. To publish to Acquia JFrog, run:
 
 ```sh
 ./gradlew publish
 ```
+
+A version that ends in `-SNAPSHOT` goes to the `libs-snapshots-local`
+repository. Any other version goes to `libs-releases-local`. Publishing needs
+the credentials in `ACQUIA_JFROG_USER` and `ACQUIA_JFROG_TOKEN`. Set them as
+environment variables, or as Gradle properties of the same names, for example
+in `~/.gradle/gradle.properties`.
 
 The wrapper pins the Gradle distribution's checksum in
 `gradle/wrapper/gradle-wrapper.properties`. To upgrade Gradle, take the
@@ -252,10 +256,6 @@ run:
 ```sh
 ./gradlew wrapper --gradle-version VERSION --gradle-distribution-sha256-sum SUM
 ```
-
-A version that ends in `-SNAPSHOT` goes to the `libs-snapshots-local`
-repository. Any other version goes to `libs-releases-local`. Publishing uses
-the same JFrog credentials.
 
 ## License
 

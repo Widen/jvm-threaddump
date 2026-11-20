@@ -1,5 +1,6 @@
 package com.widen.util.td;
 
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 final class Durations
@@ -18,7 +19,7 @@ final class Durations
         }
         long days = TimeUnit.MILLISECONDS.toDays(millis);
         long hours = TimeUnit.MILLISECONDS.toHours(millis) % 24;
-        return String.format("%d days, %d:%02d:%02d", days, hours, minutes(millis), seconds(millis));
+        return String.format(Locale.US, "%d days, %d:%02d:%02d", days, hours, minutes(millis), seconds(millis));
     }
 
     /**
@@ -28,7 +29,7 @@ final class Durations
         if (millis < 0) {
             return NOT_AVAILABLE;
         }
-        return String.format("%d:%02d:%02d.%03d", TimeUnit.MILLISECONDS.toHours(millis), minutes(millis),
+        return String.format(Locale.US, "%d:%02d:%02d.%03d", TimeUnit.MILLISECONDS.toHours(millis), minutes(millis),
                 seconds(millis), millis % 1000);
     }
 

@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static com.widen.util.td.Line.BlankLine;
@@ -68,7 +69,7 @@ final class ThreadSection
         ThreadInfo info = snapshot.info;
         String name = snapshot.name;
         ThreadGroup group = thread.getThreadGroup();
-        StringBuilder header = new StringBuilder(format("\"%s\"%s priority=%d id=0x%x group=%s cpu=%s block_cnt=%d wait_cnt=%d %s",
+        StringBuilder header = new StringBuilder(format(Locale.US, "\"%s\"%s priority=%d id=0x%x group=%s cpu=%s block_cnt=%d wait_cnt=%d %s",
                 name, thread.isDaemon() ? " daemon" : "", thread.getPriority(), thread.getId(),
                 group == null ? "-DEAD-" : group.getName(), formatCpuTime(cpuTimeNanos), info.getBlockedCount(),
                 info.getWaitedCount(), info.getThreadState()));
@@ -76,9 +77,9 @@ final class ThreadSection
         long lockOwnerId = info.getLockOwnerId();
         String lockName = info.getLockName();
         if (lockOwnerId != -1 && lockName != null) {
-            header.append(format(" (waiting on 0x%x for %s)", lockOwnerId, lockName));
+            header.append(format(Locale.US, " (waiting on 0x%x for %s)", lockOwnerId, lockName));
         } else if (lockOwnerId != -1) {
-            header.append(format(" (waiting on 0x%x)", lockOwnerId));
+            header.append(format(Locale.US, " (waiting on 0x%x)", lockOwnerId));
         } else if (lockName != null) {
             header.append(format(" (waiting for %s)", lockName));
         }

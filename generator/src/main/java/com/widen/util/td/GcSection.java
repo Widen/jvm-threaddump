@@ -3,6 +3,7 @@ package com.widen.util.td;
 import java.lang.management.GarbageCollectorMXBean;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import static com.widen.util.td.Line.BlankLine;
 import static com.widen.util.td.Line.TitledLine;
@@ -22,7 +23,7 @@ final class GcSection
     List<Line> lines() {
         List<Line> lines = new ArrayList<>();
         for (GarbageCollectorMXBean gc : jvm.garbageCollectors()) {
-            lines.add(new TitledLine("GC " + gc.getName(), format("spent %s doing %d collections",
+            lines.add(new TitledLine("GC " + gc.getName(), format(Locale.US, "spent %s doing %d collections",
                     Durations.hoursMinutesSecondsMillis(gc.getCollectionTime()), gc.getCollectionCount())));
         }
         lines.add(new BlankLine());

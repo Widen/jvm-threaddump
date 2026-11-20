@@ -46,10 +46,10 @@ final class JvmInfoSection
     List<Line> lines() {
         List<Line> lines = new ArrayList<>();
         TimeZone timeZone = jvm.timeZone();
-        SimpleDateFormat currentTime = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss z");
+        SimpleDateFormat currentTime = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss z", Locale.US);
         currentTime.setTimeZone(timeZone);
         lines.add(new TitledLine("Current Time", currentTime.format(Date.from(jvm.clock().instant()))));
-        lines.add(new TitledLine("Default Time Zone", timeZone.getDisplayName() + " (" + timeZone.getID() + ")"));
+        lines.add(new TitledLine("Default Time Zone", timeZone.getDisplayName(Locale.US) + " (" + timeZone.getID() + ")"));
         lines.add(new TitledLine("Java Version", format("%s (%s)", jvm.systemProperty("java.runtime.version"), jvm.systemProperty("java.vendor"))));
         lines.add(new TitledLine("Java VM", format("%s (%s)", jvm.systemProperty("java.vm.version"), jvm.systemProperty("java.vm.info"))));
         lines.add(new TitledLine("Java Home", jvm.systemProperty("java.home")));
@@ -76,7 +76,7 @@ final class JvmInfoSection
         if (os instanceof com.sun.management.OperatingSystemMXBean) {
             com.sun.management.OperatingSystemMXBean sunOs = (com.sun.management.OperatingSystemMXBean) os;
             lines.add(new TitledLine("System Memory", format("%s available; %s total", byteCountToDisplaySize(sunOs.getFreePhysicalMemorySize()), byteCountToDisplaySize(sunOs.getTotalPhysicalMemorySize()))));
-            lines.add(new TitledLine("CPU Load", format("%.4f system; %.4f jvm (0.0 to 1.0)", sunOs.getSystemCpuLoad(), sunOs.getProcessCpuLoad())));
+            lines.add(new TitledLine("CPU Load", format(Locale.US, "%.4f system; %.4f jvm (0.0 to 1.0)", sunOs.getSystemCpuLoad(), sunOs.getProcessCpuLoad())));
         }
         else {
             lines.add(new TitledLine("System Memory", NOT_AVAILABLE));

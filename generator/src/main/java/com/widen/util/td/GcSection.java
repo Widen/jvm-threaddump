@@ -14,7 +14,6 @@ import static java.lang.String.format;
 final class GcSection
 {
     private final JvmSnapshot snapshot;
-
     private final Findings findings;
 
     GcSection(JvmSnapshot snapshot, Findings findings) {

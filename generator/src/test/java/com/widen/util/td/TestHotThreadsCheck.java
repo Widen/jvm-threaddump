@@ -74,7 +74,8 @@ public class TestHotThreadsCheck
                 "\"t5\" (0xf) 65% of one core",
                 "\"t4\" (0xe) 64% of one core",
                 "\"t3\" (0xd) 63% of one core",
-                "\"t2\" (0xc) 62% of one core");        assertThat(findings.get(0).marks).containsExactly("thread:16", "thread:15", "thread:14", "thread:13",
+                "\"t2\" (0xc) 62% of one core");
+        assertThat(findings.get(0).marks).containsExactly("thread:16", "thread:15", "thread:14", "thread:13",
                 "thread:12");
     }
 

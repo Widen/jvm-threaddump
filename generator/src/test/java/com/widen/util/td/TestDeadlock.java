@@ -8,13 +8,16 @@ public class TestDeadlock
 {
 
     @Test
-    public void testDeadlockThreadDump() throws InterruptedException {
-        DeadlockThread.startThreads();
-        Thread.sleep(1000);
-        JvmThreadDumpImpl out = new JvmThreadDumpImpl();
-        String dump = out.generate();
-        assertThat(dump).contains("Memory: used/max");
-        assertThat(dump).doesNotContain("Deadlocked Threads: None");
+    void reportsDeadlockedThreadsAndClearsThemAfterward() throws Exception {
+        try (DeadlockFixture deadlock = DeadlockFixture.start()) {
+            String dump = new JvmThreadDumpImpl().generate();
+            assertThat(dump).doesNotContain("Deadlocked Threads: None");
+            for (long id : deadlock.threadIds()) {
+                assertThat(dump).contains("0x" + Long.toHexString(id));
+            }
+        }
+        assertThat(new JvmThreadDumpImpl().generate())
+                .contains("Deadlocked Threads: None");
     }
 
 }

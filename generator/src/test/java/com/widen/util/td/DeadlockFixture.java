@@ -47,7 +47,14 @@ final class DeadlockFixture implements AutoCloseable
         }
         catch (RuntimeException e)
         {
-            fixture.close();
+            try
+            {
+                fixture.close();
+            }
+            catch (RuntimeException closeFailure)
+            {
+                e.addSuppressed(closeFailure);
+            }
             throw e;
         }
         return fixture;
@@ -134,18 +141,17 @@ final class DeadlockFixture implements AutoCloseable
     {
         boolean interrupted = false;
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(TIMEOUT_MILLIS);
-        long remainingMillis = TIMEOUT_MILLIS;
-        while (thread.isAlive() && remainingMillis > 0)
+        long remainingNanos;
+        while (thread.isAlive() && (remainingNanos = deadline - System.nanoTime()) > 0)
         {
             try
             {
-                thread.join(remainingMillis);
+                thread.join(Math.max(1, TimeUnit.NANOSECONDS.toMillis(remainingNanos)));
             }
             catch (InterruptedException e)
             {
                 interrupted = true;
             }
-            remainingMillis = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
         }
         return interrupted;
     }

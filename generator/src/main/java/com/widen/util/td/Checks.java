@@ -12,7 +12,10 @@ final class Checks
     static final List<Check> ALL = Collections.unmodifiableList(Arrays.<Check>asList(
             new DeadlockCheck(),
             new LockPileUpCheck(),
-            new StackPileUpCheck()));
+            new StackPileUpCheck(),
+            new HeapFullCheck(),
+            new MetadataFullCheck(),
+            new GcOverheadCheck()));
 
     private Checks() {
     }

@@ -33,7 +33,7 @@ public class TestThreadSection
 
         assertThat(TestText.render(lines(thread, info)))
                 .containsExactly(
-                        titled("Thread Count", "1"),
+                        titled("Thread Count", "1 (1 WAITING)"),
                         "",
                         "\"worker-1\" priority=5 id=0x17 group=test-group cpu=-1 block_cnt=1 wait_cnt=2 WAITING"
                                 + " (waiting on 0x1f for java.util.concurrent.locks.ReentrantLock$NonfairSync@1b6d3586)",
@@ -89,9 +89,9 @@ public class TestThreadSection
             jvm.addThread(names[i], ids[i], Thread.State.RUNNABLE);
         }
 
-        List<String> text = TestText.render(new ThreadSection(jvm.snapshot()).lines());
+        List<String> text = TestText.render(new ThreadSection(jvm.snapshot(), false).lines());
 
-        assertThat(text.get(0)).isEqualTo(titled("Thread Count", "9"));
+        assertThat(text.get(0)).isEqualTo(titled("Thread Count", "9 (9 RUNNABLE)"));
         assertThat(headersOf(text)).containsExactly(
                 header("A", 6), header("a", 7), header("b", 5), header("pool", 8), header("pool", 9),
                 header("Worker", 12), header("worker-1", 23), header("worker-12", 3), header("worker1", 2));
@@ -104,10 +104,81 @@ public class TestThreadSection
         jvm.threadInfos.add(FakeThreads.info(60, Thread.State.RUNNABLE));
         jvm.addThread("kept", 61, Thread.State.RUNNABLE);
 
-        List<String> text = TestText.render(new ThreadSection(jvm.snapshot()).lines());
+        List<String> text = TestText.render(new ThreadSection(jvm.snapshot(), false).lines());
 
-        assertThat(text.get(0)).isEqualTo(titled("Thread Count", "1"));
+        assertThat(text.get(0)).isEqualTo(titled("Thread Count", "1 (1 RUNNABLE)"));
         assertThat(headersOf(text)).containsExactly(header("kept", 61));
+    }
+
+    @Test
+    void hidesPlumbingFramesAndCountsThem() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("worker", 23, Thread.State.RUNNABLE, plumbingStack());
+
+        List<String> text = TestText.render(new ThreadSection(jvm.snapshot(), false).lines());
+
+        assertThat(text.subList(2, text.size())).containsExactly(
+                header("worker", 23),
+                "    com.example.Dao.find(Dao.java:1)",
+                "    com.example.Api.get(Api.java:1)",
+                "    java.lang.Thread.run(Thread.java:1)",
+                "    ... 3 frames hidden",
+                "");
+    }
+
+    @Test
+    void countsOneHiddenFrameInTheSingular() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("worker", 23, Thread.State.RUNNABLE,
+                FakeThreads.frame("com.example.Dao", "find"),
+                FakeThreads.frame("java.lang.reflect.Method", "invoke"));
+
+        assertThat(TestText.render(new ThreadSection(jvm.snapshot(), false).lines()))
+                .contains("    ... 1 frame hidden");
+    }
+
+    @Test
+    void printsEveryFrameWhenAskedForAllFrames() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("worker", 23, Thread.State.RUNNABLE, plumbingStack());
+
+        List<String> text = TestText.render(new ThreadSection(jvm.snapshot(), true).lines());
+
+        assertThat(text.subList(2, text.size())).containsExactly(
+                header("worker", 23),
+                "    com.example.Dao.find(Dao.java:1)",
+                "    $Dao_1a.find($Dao_1a.java:1)",
+                "    java.lang.reflect.Method.invoke(Method.java:1)",
+                "    com.example.Api.get(Api.java:1)",
+                "    org.eclipse.jetty.server.Server.handle(Server.java:1)",
+                "    java.lang.Thread.run(Thread.java:1)",
+                "");
+    }
+
+    @Test
+    void countsThreadsByState() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("a", 1, Thread.State.WAITING);
+        jvm.addThread("b", 2, Thread.State.RUNNABLE);
+        jvm.addThread("c", 3, Thread.State.WAITING);
+        jvm.addThread("d", 4, Thread.State.BLOCKED);
+        jvm.addThread("e", 5, Thread.State.RUNNABLE);
+        jvm.addThread("f", 6, Thread.State.WAITING);
+
+        assertThat(TestText.render(new ThreadSection(jvm.snapshot(), false).lines()).get(0))
+                .isEqualTo(titled("Thread Count", "6 (2 RUNNABLE, 1 BLOCKED, 3 WAITING)"));
+        assertThat(TestText.render(new ThreadSection(new FakeJvm().snapshot(), false).lines()).get(0))
+                .isEqualTo(titled("Thread Count", "0"));
+    }
+
+    private static StackTraceElement[] plumbingStack() {
+        return new StackTraceElement[] {
+                FakeThreads.frame("com.example.Dao", "find"),
+                FakeThreads.frame("$Dao_1a", "find"),
+                FakeThreads.frame("java.lang.reflect.Method", "invoke"),
+                FakeThreads.frame("com.example.Api", "get"),
+                FakeThreads.frame("org.eclipse.jetty.server.Server", "handle"),
+                FakeThreads.frame("java.lang.Thread", "run")};
     }
 
     @Test
@@ -128,7 +199,7 @@ public class TestThreadSection
         when(jvm.threads.isThreadCpuTimeEnabled()).thenReturn(true);
         when(jvm.threads.getThreadCpuTime(23)).thenReturn(1_500_000_000L);
 
-        assertThat(TestText.render(new ThreadSection(jvm.snapshot()).lines()))
+        assertThat(TestText.render(new ThreadSection(jvm.snapshot(), false).lines()))
                 .anyMatch(line -> line.contains(" cpu=1500ms "));
     }
 
@@ -144,7 +215,7 @@ public class TestThreadSection
             return 0L;
         });
 
-        List<String> text = TestText.render(new ThreadSection(jvm.snapshot()).lines());
+        List<String> text = TestText.render(new ThreadSection(jvm.snapshot(), false).lines());
 
         assertThat(headersOf(text)).singleElement().satisfies(header -> {
             assertThat(header).startsWith("\"before\"");
@@ -180,7 +251,7 @@ public class TestThreadSection
         FakeJvm jvm = new FakeJvm();
         jvm.liveThreads.add(thread);
         jvm.threadInfos.add(info);
-        return new ThreadSection(jvm.snapshot()).lines();
+        return new ThreadSection(jvm.snapshot(), false).lines();
     }
 
     private static List<String> headersOf(List<String> text) {

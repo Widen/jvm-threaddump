@@ -22,13 +22,15 @@ public final class JvmThreadDump
     private final List<String> mainArguments;
     private final Map<String, ?> customValues;
     private final Duration sampleWindow;
+    private final boolean allFrames;
 
     private JvmThreadDump(JvmSources jvm, List<String> mainArguments, Map<String, ?> customValues,
-            Duration sampleWindow) {
+            Duration sampleWindow, boolean allFrames) {
         this.jvm = jvm;
         this.mainArguments = mainArguments;
         this.customValues = customValues;
         this.sampleWindow = sampleWindow;
+        this.allFrames = allFrames;
     }
 
     /**
@@ -53,11 +55,16 @@ public final class JvmThreadDump
                 .jvmSources(jvm)
                 .mainArguments(mainArguments)
                 .customValues(customValues)
-                .sampleWindow(sampleWindow);
+                .sampleWindow(sampleWindow)
+                .allFrames(allFrames);
     }
 
     Duration sampleWindow() {
         return sampleWindow;
+    }
+
+    boolean allFrames() {
+        return allFrames;
     }
 
     /**
@@ -72,7 +79,7 @@ public final class JvmThreadDump
         lines.addAll(new MemorySection(jvm, snapshot).lines());
         lines.addAll(new GcSection(snapshot).lines());
         lines.addAll(new DeadlockSection(snapshot).lines());
-        lines.addAll(new ThreadSection(snapshot).lines());
+        lines.addAll(new ThreadSection(snapshot, allFrames).lines());
         return Line.render(lines);
     }
 
@@ -86,6 +93,7 @@ public final class JvmThreadDump
         private List<String> mainArguments = Collections.emptyList();
         private Map<String, ?> customValues = Collections.emptyMap();
         private Duration sampleWindow = Duration.ofSeconds(1);
+        private boolean allFrames;
 
         private Builder() {
         }
@@ -128,6 +136,15 @@ public final class JvmThreadDump
             return this;
         }
 
+        /**
+         * Sets whether every stack frame prints. By default the dump hides reflection, generated proxy, Tapestry, and
+         * servlet container frames and prints how many it hid; the top frame of each stack always prints.
+         */
+        public Builder allFrames(boolean allFrames) {
+            this.allFrames = allFrames;
+            return this;
+        }
+
         Builder jvmSources(JvmSources jvm) {
             this.jvm = Objects.requireNonNull(jvm, "jvm");
             return this;
@@ -142,7 +159,8 @@ public final class JvmThreadDump
                     jvm,
                     Collections.unmodifiableList(new ArrayList<>(mainArguments)),
                     Collections.unmodifiableMap(new LinkedHashMap<>(customValues)),
-                    sampleWindow);
+                    sampleWindow,
+                    allFrames);
         }
 
     }

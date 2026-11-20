@@ -31,7 +31,7 @@ public class TestJvmThreadDump
         lines.addAll(new MemorySection(jvm, snapshot).lines());
         lines.addAll(new GcSection(snapshot).lines());
         lines.addAll(new DeadlockSection(snapshot).lines());
-        lines.addAll(new ThreadSection(snapshot).lines());
+        lines.addAll(new ThreadSection(snapshot, false).lines());
 
         assertThat(JvmThreadDump.builder().jvmSources(jvm).build().generate())
                 .isEqualTo(Line.render(lines));
@@ -108,15 +108,33 @@ public class TestJvmThreadDump
                 .mainArguments(Arrays.asList("--port", "8080"))
                 .customValues(Collections.singletonMap("App", "cheese"))
                 .sampleWindow(Duration.ofSeconds(5))
+                .allFrames(true)
                 .build();
 
         JvmThreadDump copy = dump.toBuilder().build();
 
         assertThat(copy.sampleWindow()).isEqualTo(Duration.ofSeconds(5));
+        assertThat(copy.allFrames()).isTrue();
         assertThat(copy.generate())
                 .contains(titled("Main Arguments", "--port 8080"))
                 .contains(titled("App", "cheese"))
                 .isEqualTo(dump.generate());
+    }
+
+    @Test
+    void hidesPlumbingFramesUnlessAskedForAllFrames() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("worker", 23, Thread.State.RUNNABLE,
+                FakeThreads.frame("com.example.Dao", "find"),
+                FakeThreads.frame("java.lang.reflect.Method", "invoke"));
+        JvmThreadDump.Builder builder = JvmThreadDump.builder().jvmSources(jvm).sampleWindow(Duration.ZERO);
+
+        assertThat(builder.build().generate())
+                .contains("    ... 1 frame hidden")
+                .doesNotContain("java.lang.reflect.Method.invoke");
+        assertThat(builder.allFrames(true).build().generate())
+                .contains("java.lang.reflect.Method.invoke")
+                .doesNotContain("hidden");
     }
 
     @Test

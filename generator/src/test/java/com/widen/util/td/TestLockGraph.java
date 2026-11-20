@@ -30,6 +30,29 @@ public class TestLockGraph
     }
 
     @Test
+    void findsACycleWhenAThreadBehindItComesFirst() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThreadWaitingOn("c", 1, Thread.State.BLOCKED, 2, null);
+        jvm.addThreadWaitingOn("d", 2, Thread.State.BLOCKED, 3, null);
+        jvm.addThreadWaitingOn("e", 3, Thread.State.BLOCKED, 2, null);
+        JvmSnapshot snapshot = jvm.snapshot();
+        LockGraph graph = LockGraph.of(snapshot.threads);
+
+        assertThat(graph.cycles()).containsExactly(Arrays.asList(thread(snapshot, 2), thread(snapshot, 3)));
+        assertThat(graph.behind(graph.cycles().get(0))).containsExactly(thread(snapshot, 1));
+    }
+
+    @Test
+    void ignoresAThreadBlockedOnItself() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThreadWaitingOn("s", 5, Thread.State.BLOCKED, 5, null);
+        LockGraph graph = LockGraph.of(jvm.snapshot().threads);
+
+        assertThat(graph.cycles()).isEmpty();
+        assertThat(graph.waitersByHolder()).isEmpty();
+    }
+
+    @Test
     void followsAChainToItsHolder() {
         FakeJvm jvm = new FakeJvm();
         jvm.addThread("h", 10, Thread.State.RUNNABLE);

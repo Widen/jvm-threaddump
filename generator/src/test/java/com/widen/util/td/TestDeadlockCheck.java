@@ -1,8 +1,11 @@
 package com.widen.util.td;
 
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
@@ -25,12 +28,8 @@ public class TestDeadlockCheck
     }
 
     @Test
-    void printsTheCycleAndCountsTheThreadsBehindIt() {
-        FakeJvm jvm = deadlockOfAAndB();
-        jvm.addThreadWaitingOn("c", 3, Thread.State.BLOCKED, 1, null);
-        when(jvm.threads.findDeadlockedThreads()).thenReturn(new long[] { 3, 1, 2 });
-
-        List<Finding> findings = findingsOf(jvm);
+    void printsTheCycle() {
+        List<Finding> findings = findingsOf(deadlockOfAAndB());
 
         assertThat(findings).hasSize(1);
         assertThat(findings.get(0).title).isEqualTo("Deadlock");
@@ -39,23 +38,25 @@ public class TestDeadlockCheck
                 "\"a\" (0x1) waits for java.lang.Object@1a, held by \"b\"",
                 "    com.example.A.run(A.java:1)",
                 "\"b\" (0x2) waits for java.lang.Object@2b, held by \"a\"",
-                "    com.example.B.run(B.java:1)",
-                "1 other thread waits behind them");
+                "    com.example.B.run(B.java:1)");
         assertThat(findings.get(0).marks).containsExactly("thread:1", "thread:2");
     }
 
-    @Test
-    void countsSeveralThreadsBehindTheCycle() {
+    @ParameterizedTest
+    @CsvSource({ "0,", "1,1 other thread waits behind them", "2,2 other threads wait behind them" })
+    void countsTheThreadsBehindTheCycle(int behindCount, String expectedLastLine) {
         FakeJvm jvm = deadlockOfAAndB();
-        jvm.addThreadWaitingOn("c", 3, Thread.State.BLOCKED, 1, null);
-        jvm.addThreadWaitingOn("d", 4, Thread.State.BLOCKED, 3, null);
+        long ownerId = 1;
+        for (int i = 0; i < behindCount; i++) {
+            long id = 3 + i;
+            jvm.addThreadWaitingOn("c" + id, id, Thread.State.BLOCKED, ownerId, null);
+            ownerId = id;
+        }
 
-        assertThat(findingsOf(jvm).get(0).lines).endsWith("2 other threads wait behind them");
-    }
+        List<String> lines = findingsOf(jvm).get(0).lines;
 
-    @Test
-    void leavesOutTheBehindLineWhenNobodyWaits() {
-        assertThat(findingsOf(deadlockOfAAndB()).get(0).lines).hasSize(5).noneMatch(line -> line.contains("behind"));
+        assertThat(lines.subList(5, lines.size()))
+                .isEqualTo(expectedLastLine == null ? Collections.emptyList() : Collections.singletonList(expectedLastLine));
     }
 
     @Test

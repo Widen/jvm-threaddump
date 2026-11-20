@@ -197,7 +197,7 @@ disabled, or when no window ran.
 | --- | --- | --- |
 | Deadlock | no | The JVM reports deadlocked threads. Each cycle of threads that wait on each other is one finding, with the number of other threads that wait behind it. |
 | Lock Pile-up | no | 5 or more threads wait on locks that lead back to one holder. |
-| Stack Pile-up | no | 10 or more threads that are not idle are stuck in the same call. |
+| Stack Pile-up | no | 10 or more threads that are not idle are in the same call. |
 | Heap Full | no | An old-generation heap pool holds 90% or more of its max now and held 90% or more after its last collection. |
 | Metadata Full | no | `Metaspace`, `Compressed Class Space`, `Code Cache`, or a `CodeHeap` pool holds 90% or more of a defined max. |
 | GC Overhead | uses one | Garbage collection took 25% or more of the window and at least 500 ms, or 10% or more of JVM uptime after the first 5 minutes. |

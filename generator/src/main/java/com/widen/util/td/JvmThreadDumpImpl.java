@@ -5,8 +5,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static com.widen.util.td.Line.BlankLine;
-
 public class JvmThreadDumpImpl implements JvmThreadDump
 {
 
@@ -28,7 +26,7 @@ public class JvmThreadDumpImpl implements JvmThreadDump
         lines.addAll(new MemorySection(jvm).lines());
         lines.addAll(new GcSection(jvm).lines());
         lines.addAll(new DeadlockSection(jvm).lines());
-        doThreads();
+        lines.addAll(new ThreadSection(jvm).lines());
 
         return Line.render(lines);
     }
@@ -45,20 +43,6 @@ public class JvmThreadDumpImpl implements JvmThreadDump
      */
     protected Map<String, Object> getCustomValues() {
         return Collections.emptyMap();
-    }
-
-    private void doThreads() {
-        ThreadDumpProducer producer = new ThreadDumpProducer();
-        Map<Thread, StackTraceElement[]> threads = producer.getThreads();
-        lines.add(new Line.TitledLine("Thread Count", String.valueOf(threads.size())));
-        lines.add(new Line.BlankLine());
-        for (Map.Entry<Thread, StackTraceElement[]> entry : threads.entrySet()) {
-            lines.add(new Line.SimpleLine(ThreadDumpProducer.formatThread(entry.getKey())));
-            for (StackTraceElement frame : entry.getValue()) {
-                lines.add(new Line.SimpleLine(ThreadDumpProducer.formatFrame(frame)));
-            }
-            lines.add(new BlankLine());
-        }
     }
 
 }

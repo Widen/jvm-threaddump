@@ -29,7 +29,6 @@ import java.util.stream.Collectors;
 import com.sun.management.OperatingSystemMXBean;
 
 import static com.widen.util.td.BytesUtils.byteCountToDisplaySize;
-import static com.widen.util.td.DurationFormatUtils.formatDuration;
 import static com.widen.util.td.Line.BlankLine;
 import static com.widen.util.td.Line.MultiLine;
 import static com.widen.util.td.Line.TitledLine;
@@ -59,11 +58,7 @@ public class JvmThreadDumpImpl implements JvmThreadDump
         doDeadlocks();
         doThreads();
 
-        StringBuilder sb = new StringBuilder(10_000);
-        for (Line line : lines) {
-            sb.append(line.toString());
-        }
-        return sb.toString();
+        return Line.render(lines);
     }
 
     private void doJvmInfo() {
@@ -129,7 +124,7 @@ public class JvmThreadDumpImpl implements JvmThreadDump
             return "Not Available";
         }
         long millis = unit.toMillis(value);
-        return formatDuration(millis, "d 'days', H:mm:ss", true);
+        return Durations.daysHoursMinutesSeconds(millis);
     }
 
     private Uptime systemUptimeSeconds() {
@@ -219,7 +214,7 @@ public class JvmThreadDumpImpl implements JvmThreadDump
 
     private void doGc() {
         for (GarbageCollectorMXBean gc : gcBeans) {
-            lines.add(new TitledLine("GC " + gc.getName(), String.format("spent %s doing %d collections", formatDuration(gc.getCollectionTime(), "H:mm:ss", true), gc.getCollectionCount())));
+            lines.add(new TitledLine("GC " + gc.getName(), String.format("spent %s doing %d collections", Durations.hoursMinutesSecondsMillis(gc.getCollectionTime()), gc.getCollectionCount())));
         }
         lines.add(new Line.BlankLine());
     }

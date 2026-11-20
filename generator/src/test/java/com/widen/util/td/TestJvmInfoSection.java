@@ -47,6 +47,7 @@ public class TestJvmInfoSection
                         titled("Operating System", "Linux (5.10)"),
                         titled("System Processors", "4 amd64"),
                         titled("System Memory", "1,024 MB available; 4,096 MB total"),
+                        titled("File Descriptors", "Not Available"),
                         titled("CPU Load", "0.2500 system; 0.1250 jvm (0.0 to 1.0)"),
                         titled("System Uptime", "1 days, 2:03:04"),
                         titled("System Idle Time", "0 days, 3:25:45"),
@@ -63,6 +64,22 @@ public class TestJvmInfoSection
 
         assertThat(TestText.render(new JvmInfoSection(jvm, snapshot, findings, emptyList(), emptyMap()).lines()))
                 .contains(titled("CPU Load", "0.2500 system; 0.1250 jvm (0.0 to 1.0) <<< Alpha"));
+    }
+
+    @Test
+    void printsFileDescriptorsAfterSystemMemory() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.unixOperatingSystem(412, 65_536);
+        JvmSnapshot snapshot = jvm.snapshot();
+        Findings findings = StubCheck.findingsOf(snapshot, StubCheck.finding("Alpha", Finding.lineMark("File Descriptors")));
+
+        assertThat(TestText.render(lines(jvm)))
+                .containsSubsequence(
+                        titled("System Memory", "1,024 MB available; 4,096 MB total"),
+                        titled("File Descriptors", "412 open; 65,536 limit"),
+                        titled("CPU Load", "0.2500 system; 0.1250 jvm (0.0 to 1.0)"));
+        assertThat(TestText.render(new JvmInfoSection(jvm, snapshot, findings, emptyList(), emptyMap()).lines()))
+                .contains(titled("File Descriptors", "412 open; 65,536 limit <<< Alpha"));
     }
 
     @Test
@@ -99,6 +116,7 @@ public class TestJvmInfoSection
                 .contains(
                         titled("Hostname", "Not Available"),
                         titled("System Memory", "Not Available"),
+                        titled("File Descriptors", "Not Available"),
                         titled("CPU Load", "Not Available"),
                         titled("System Uptime", "Not Available"),
                         titled("System Idle Time", "Not Available"),

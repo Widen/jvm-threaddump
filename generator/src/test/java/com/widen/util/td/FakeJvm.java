@@ -41,7 +41,7 @@ final class FakeJvm implements JvmSources
     com.sun.management.ThreadMXBean threads = mockThreads();
     List<MemoryPoolMXBean> memoryPools = new ArrayList<>();
     List<GarbageCollectorMXBean> garbageCollectors = new ArrayList<>();
-    OperatingSystemMXBean operatingSystem = mockOperatingSystem();
+    OperatingSystemMXBean operatingSystem = mockOperatingSystem(com.sun.management.OperatingSystemMXBean.class);
     Clock clock = Clock.fixed(Instant.parse("2026-11-20T15:30:00Z"), ZoneOffset.UTC);
     TimeZone timeZone = TimeZone.getTimeZone("UTC");
     Map<String, String> environment = new HashMap<>();
@@ -93,8 +93,8 @@ final class FakeJvm implements JvmSources
         return bean;
     }
 
-    private static OperatingSystemMXBean mockOperatingSystem() {
-        com.sun.management.OperatingSystemMXBean bean = mock(com.sun.management.OperatingSystemMXBean.class);
+    private static <T extends com.sun.management.OperatingSystemMXBean> T mockOperatingSystem(Class<T> type) {
+        T bean = mock(type);
         when(bean.getName()).thenReturn("Linux");
         when(bean.getVersion()).thenReturn("5.10");
         when(bean.getAvailableProcessors()).thenReturn(4);
@@ -157,6 +157,35 @@ final class FakeJvm implements JvmSources
     ThreadInfo addAllocatingThread(String name, long id, long bytes) {
         ThreadInfo info = addThread(name, id, Thread.State.RUNNABLE);
         when(threads.getThreadAllocatedBytes(id)).thenReturn(0L, bytes);
+        return info;
+    }
+
+    /** Sets the system and JVM CPU loads the operating system bean reports. */
+    void cpuLoads(double system, double process) {
+        com.sun.management.OperatingSystemMXBean sunOs = (com.sun.management.OperatingSystemMXBean) operatingSystem;
+        when(sunOs.getSystemCpuLoad()).thenReturn(system);
+        when(sunOs.getProcessCpuLoad()).thenReturn(process);
+    }
+
+    /** Replaces the operating system bean with a Unix one that reports the given descriptor counts. */
+    void unixOperatingSystem(long openFileDescriptors, long maxFileDescriptors) {
+        com.sun.management.UnixOperatingSystemMXBean unix = mockOperatingSystem(
+                com.sun.management.UnixOperatingSystemMXBean.class);
+        when(unix.getOpenFileDescriptorCount()).thenReturn(openFileDescriptors);
+        when(unix.getMaxFileDescriptorCount()).thenReturn(maxFileDescriptors);
+        operatingSystem = unix;
+    }
+
+    /** Makes the thread bean report per-thread CPU time. */
+    void enableCpuTime() {
+        when(threads.isThreadCpuTimeSupported()).thenReturn(true);
+        when(threads.isThreadCpuTimeEnabled()).thenReturn(true);
+    }
+
+    /** Adds a thread that uses {@code cpuNanos} of CPU time between the start and the end of a sampling window. */
+    ThreadInfo addBusyThread(String name, long id, long cpuNanos, StackTraceElement... frames) {
+        ThreadInfo info = addThread(name, id, Thread.State.RUNNABLE, frames);
+        when(threads.getThreadCpuTime(id)).thenReturn(0L, cpuNanos);
         return info;
     }
 

@@ -36,6 +36,10 @@ final class JvmSnapshot
     final double systemCpuLoad;
     /** -1 when unavailable. */
     final double processCpuLoad;
+    /** -1 unless the operating system bean is a {@link com.sun.management.UnixOperatingSystemMXBean}. */
+    final long openFileDescriptors;
+    /** -1 unless the operating system bean is a {@link com.sun.management.UnixOperatingSystemMXBean}. */
+    final long maxFileDescriptors;
     final long uptimeMillis;
     /** The length of the sampling window in nanoseconds, or 0 when not sampled. */
     final long windowNanos;
@@ -45,14 +49,17 @@ final class JvmSnapshot
     private final LockGraph locks;
 
     private JvmSnapshot(List<ThreadSnapshot> threads, long[] deadlockedIds, List<PoolSnapshot> pools,
-            List<GcSnapshot> collectors, double systemCpuLoad, double processCpuLoad, long uptimeMillis,
-            long windowNanos, boolean cpuTimeAvailable, boolean allocationAvailable, long generatingThreadId) {
+            List<GcSnapshot> collectors, double systemCpuLoad, double processCpuLoad, long openFileDescriptors,
+            long maxFileDescriptors, long uptimeMillis, long windowNanos, boolean cpuTimeAvailable,
+            boolean allocationAvailable, long generatingThreadId) {
         this.threads = threads;
         this.deadlockedIds = deadlockedIds;
         this.pools = pools;
         this.collectors = collectors;
         this.systemCpuLoad = systemCpuLoad;
         this.processCpuLoad = processCpuLoad;
+        this.openFileDescriptors = openFileDescriptors;
+        this.maxFileDescriptors = maxFileDescriptors;
         this.uptimeMillis = uptimeMillis;
         this.windowNanos = windowNanos;
         this.cpuTimeAvailable = cpuTimeAvailable;
@@ -150,6 +157,13 @@ final class JvmSnapshot
             systemCpuLoad = sunOs.getSystemCpuLoad();
             processCpuLoad = sunOs.getProcessCpuLoad();
         }
+        long openFileDescriptors = -1;
+        long maxFileDescriptors = -1;
+        if (os instanceof com.sun.management.UnixOperatingSystemMXBean) {
+            com.sun.management.UnixOperatingSystemMXBean unixOs = (com.sun.management.UnixOperatingSystemMXBean) os;
+            openFileDescriptors = unixOs.getOpenFileDescriptorCount();
+            maxFileDescriptors = unixOs.getMaxFileDescriptorCount();
+        }
 
         return new JvmSnapshot(
                 Collections.unmodifiableList(threads),
@@ -158,6 +172,8 @@ final class JvmSnapshot
                 Collections.unmodifiableList(collectors),
                 systemCpuLoad,
                 processCpuLoad,
+                openFileDescriptors,
+                maxFileDescriptors,
                 jvm.runtime().getUptime(),
                 sampled ? windowNanos : 0,
                 cpuTimeAvailable,

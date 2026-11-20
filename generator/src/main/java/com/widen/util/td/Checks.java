@@ -15,7 +15,10 @@ final class Checks
             new StackPileUpCheck(),
             new HeapFullCheck(),
             new MetadataFullCheck(),
-            new GcOverheadCheck()));
+            new GcOverheadCheck(),
+            new CpuSaturatedCheck(),
+            new FileDescriptorsCheck(),
+            new HotThreadsCheck()));
 
     private Checks() {
     }

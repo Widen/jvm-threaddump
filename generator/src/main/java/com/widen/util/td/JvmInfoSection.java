@@ -89,6 +89,11 @@ final class JvmInfoSection
         else {
             lines.add(new TitledLine("System Memory", NOT_AVAILABLE));
         }
+        String fileDescriptors = snapshot.openFileDescriptors < 0 || snapshot.maxFileDescriptors < 0
+                ? NOT_AVAILABLE
+                : format(Locale.US, "%,d open; %,d limit", snapshot.openFileDescriptors, snapshot.maxFileDescriptors);
+        lines.add(new TitledLine("File Descriptors",
+                fileDescriptors + findings.marker(Finding.lineMark("File Descriptors"))));
         String cpuLoad = snapshot.systemCpuLoad < 0 || snapshot.processCpuLoad < 0
                 ? NOT_AVAILABLE
                 : format(Locale.US, "%.4f system; %.4f jvm (0.0 to 1.0)", snapshot.systemCpuLoad, snapshot.processCpuLoad);

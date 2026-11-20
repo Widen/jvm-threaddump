@@ -35,12 +35,15 @@ final class JvmInfoSection
 
     private final JvmSources jvm;
     private final JvmSnapshot snapshot;
+    private final Findings findings;
     private final List<String> mainArguments;
     private final Map<String, ?> customValues;
 
-    JvmInfoSection(JvmSources jvm, JvmSnapshot snapshot, List<String> mainArguments, Map<String, ?> customValues) {
+    JvmInfoSection(JvmSources jvm, JvmSnapshot snapshot, Findings findings, List<String> mainArguments,
+            Map<String, ?> customValues) {
         this.jvm = jvm;
         this.snapshot = snapshot;
+        this.findings = findings;
         this.mainArguments = mainArguments;
         this.customValues = customValues;
     }
@@ -86,9 +89,10 @@ final class JvmInfoSection
         else {
             lines.add(new TitledLine("System Memory", NOT_AVAILABLE));
         }
-        lines.add(new TitledLine("CPU Load", snapshot.systemCpuLoad < 0 || snapshot.processCpuLoad < 0
+        String cpuLoad = snapshot.systemCpuLoad < 0 || snapshot.processCpuLoad < 0
                 ? NOT_AVAILABLE
-                : format(Locale.US, "%.4f system; %.4f jvm (0.0 to 1.0)", snapshot.systemCpuLoad, snapshot.processCpuLoad)));
+                : format(Locale.US, "%.4f system; %.4f jvm (0.0 to 1.0)", snapshot.systemCpuLoad, snapshot.processCpuLoad);
+        lines.add(new TitledLine("CPU Load", cpuLoad + findings.marker(Finding.lineMark("CPU Load"))));
 
         long[] uptime = systemUptimeSeconds();
         lines.add(new TitledLine("System Uptime", formatTime(uptime[0], TimeUnit.SECONDS)));

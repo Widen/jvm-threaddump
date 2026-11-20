@@ -9,8 +9,8 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Generates a plain-text report of the running JVM: host and runtime details, memory, garbage
- * collectors, deadlocked threads, and a stack trace for every live thread.
+ * Generates a plain-text report of the running JVM: a summary of problems found, host and runtime
+ * details, memory, garbage collectors, deadlocked threads, and a stack trace for every live thread.
  *
  * <p>An instance is immutable and safe to share between threads. Each call to {@link #generate()}
  * reads the JVM again.
@@ -74,12 +74,14 @@ public final class JvmThreadDump
      */
     public String generate() {
         JvmSnapshot snapshot = JvmSnapshot.read(jvm, sampleWindow);
+        Findings findings = Findings.run(snapshot, Checks.ALL);
         List<Line> lines = new ArrayList<>();
-        lines.addAll(new JvmInfoSection(jvm, snapshot, mainArguments, customValues).lines());
-        lines.addAll(new MemorySection(jvm, snapshot).lines());
-        lines.addAll(new GcSection(snapshot).lines());
+        lines.addAll(new FindingsSection(findings, snapshot).lines());
+        lines.addAll(new JvmInfoSection(jvm, snapshot, findings, mainArguments, customValues).lines());
+        lines.addAll(new MemorySection(jvm, snapshot, findings).lines());
+        lines.addAll(new GcSection(snapshot, findings).lines());
         lines.addAll(new DeadlockSection(snapshot).lines());
-        lines.addAll(new ThreadSection(snapshot, allFrames).lines());
+        lines.addAll(new ThreadSection(snapshot, findings, allFrames).lines());
         return Line.render(lines);
     }
 

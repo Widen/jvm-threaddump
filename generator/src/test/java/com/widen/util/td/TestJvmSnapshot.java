@@ -12,7 +12,9 @@ import org.junit.jupiter.api.Test;
 
 import static com.widen.util.td.FakeJvm.MB;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -121,5 +123,122 @@ public class TestJvmSnapshot
         assertThat(snapshot.uptimeMillis).isEqualTo(90_061_000L);
         assertThat(snapshot.generatingThreadId).isEqualTo(Thread.currentThread().getId());
         assertThat(snapshot.sampled()).isFalse();
+    }
+
+    @Test
+    void reportsWhatChangedDuringTheWindow() {
+        FakeJvm jvm = jvmWithCpuAndAllocation();
+        jvm.addThread("a", 23, Thread.State.RUNNABLE);
+        jvm.addThread("c", 25, Thread.State.RUNNABLE);
+        when(jvm.threads.getAllThreadIds()).thenReturn(new long[] {23, 24});
+        when(jvm.threads.getThreadCpuTime(23)).thenReturn(1_000_000_000L, 1_600_000_000L);
+        when(jvm.threads.getThreadCpuTime(25)).thenReturn(200_000_000L);
+        when(jvm.threads.getThreadAllocatedBytes(23)).thenReturn(10 * MB, 110 * MB);
+        when(jvm.threads.getThreadAllocatedBytes(25)).thenReturn(5 * MB);
+        GarbageCollectorMXBean collector = jvm.addCollector("G1 Young Generation", 5, 100);
+        when(collector.getCollectionCount()).thenReturn(5L, 7L);
+        when(collector.getCollectionTime()).thenReturn(100L, 400L);
+        com.sun.management.OperatingSystemMXBean os = (com.sun.management.OperatingSystemMXBean) jvm.operatingSystem;
+        when(os.getSystemCpuLoad()).thenReturn(0.10, 0.95);
+        when(os.getProcessCpuLoad()).thenReturn(0.05, 0.40);
+
+        JvmSnapshot snapshot = JvmSnapshot.read(jvm, Duration.ofSeconds(1));
+
+        assertThat(snapshot.windowNanos).isEqualTo(1_000_000_000L);
+        assertThat(snapshot.sampled()).isTrue();
+        assertThat(jvm.pauses).isEqualTo(1);
+        assertThat(snapshot.threads).extracting(thread -> thread.id()).containsExactly(23L, 25L);
+        assertThat(snapshot.threads.get(0).windowCpuNanos).isEqualTo(600_000_000L);
+        assertThat(snapshot.threads.get(0).windowAllocatedBytes).isEqualTo(100 * MB);
+        assertThat(snapshot.threads.get(1).windowCpuNanos).isEqualTo(200_000_000L);
+        assertThat(snapshot.threads.get(1).windowAllocatedBytes).isEqualTo(5 * MB);
+        assertThat(snapshot.collectors).singleElement().satisfies(gc -> {
+            assertThat(gc.windowCount).isEqualTo(2);
+            assertThat(gc.windowTimeMillis).isEqualTo(300);
+            assertThat(gc.count).isEqualTo(7);
+            assertThat(gc.timeMillis).isEqualTo(400);
+        });
+        assertThat(snapshot.systemCpuLoad).isEqualTo(0.95);
+        assertThat(snapshot.processCpuLoad).isEqualTo(0.40);
+    }
+
+    @Test
+    void doesNotPauseForAZeroWindow() {
+        FakeJvm jvm = jvmWithCpuAndAllocation();
+        jvm.addThread("main", 1, Thread.State.RUNNABLE);
+        jvm.addThread("worker", 2, Thread.State.RUNNABLE);
+
+        JvmSnapshot snapshot = JvmSnapshot.read(jvm, Duration.ZERO);
+
+        assertThat(jvm.pauses).isEqualTo(0);
+        assertThat(snapshot.sampled()).isFalse();
+        assertThat(snapshot.threads.get(0).windowCpuNanos).isEqualTo(-1);
+        verify(jvm.threads, times(1)).getThreadCpuTime(1);
+        verify(jvm.threads, times(1)).getThreadCpuTime(2);
+        verify(((com.sun.management.OperatingSystemMXBean) jvm.operatingSystem), times(1)).getSystemCpuLoad();
+    }
+
+    @Test
+    void finishesWithTheTimeThatElapsedWhenInterrupted() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.interruptPauseAfter = Duration.ofMillis(250);
+
+        JvmSnapshot snapshot = JvmSnapshot.read(jvm, Duration.ofSeconds(1));
+
+        assertThat(snapshot.windowNanos).isEqualTo(250_000_000L);
+        assertThat(Thread.interrupted()).isTrue();
+    }
+
+    @Test
+    void isNotSampledWhenInterruptedAtOnce() {
+        FakeJvm jvm = jvmWithCpuAndAllocation();
+        jvm.addThread("main", 1, Thread.State.RUNNABLE);
+        jvm.addCollector("G1 Young Generation", 5, 100);
+        jvm.interruptPauseAfter = Duration.ZERO;
+
+        JvmSnapshot snapshot = JvmSnapshot.read(jvm, Duration.ofSeconds(1));
+
+        assertThat(Thread.interrupted()).isTrue();
+        assertThat(snapshot.sampled()).isFalse();
+        assertThat(snapshot.windowNanos).isEqualTo(0);
+        assertThat(snapshot.threads.get(0).windowCpuNanos).isEqualTo(-1);
+        assertThat(snapshot.threads.get(0).windowAllocatedBytes).isEqualTo(-1);
+        assertThat(snapshot.collectors.get(0).windowCount).isEqualTo(0);
+        assertThat(snapshot.collectors.get(0).windowTimeMillis).isEqualTo(0);
+    }
+
+    @Test
+    void leavesOutWindowCpuForAThreadWhoseTimeIsUnavailable() {
+        FakeJvm jvm = jvmWithCpuAndAllocation();
+        jvm.addThread("a", 23, Thread.State.RUNNABLE);
+        when(jvm.threads.getAllThreadIds()).thenReturn(new long[] {23});
+        when(jvm.threads.getThreadCpuTime(23)).thenReturn(1_000_000_000L, -1L);
+
+        JvmSnapshot snapshot = JvmSnapshot.read(jvm, Duration.ofSeconds(1));
+
+        assertThat(snapshot.threads.get(0).windowCpuNanos).isEqualTo(-1);
+    }
+
+    @Test
+    void leavesOutAllocationWhenUnsupported() {
+        FakeJvm jvm = jvmWithCpuAndAllocation();
+        jvm.addThread("a", 23, Thread.State.RUNNABLE);
+        when(jvm.threads.getAllThreadIds()).thenReturn(new long[] {23});
+        when(jvm.threads.isThreadAllocatedMemorySupported()).thenReturn(false);
+
+        JvmSnapshot snapshot = JvmSnapshot.read(jvm, Duration.ofSeconds(1));
+
+        assertThat(snapshot.allocationAvailable).isFalse();
+        assertThat(snapshot.threads.get(0).windowAllocatedBytes).isEqualTo(-1);
+        verify(jvm.threads, never()).getThreadAllocatedBytes(anyLong());
+    }
+
+    private static FakeJvm jvmWithCpuAndAllocation() {
+        FakeJvm jvm = new FakeJvm();
+        when(jvm.threads.isThreadCpuTimeSupported()).thenReturn(true);
+        when(jvm.threads.isThreadCpuTimeEnabled()).thenReturn(true);
+        when(jvm.threads.isThreadAllocatedMemorySupported()).thenReturn(true);
+        when(jvm.threads.isThreadAllocatedMemoryEnabled()).thenReturn(true);
+        return jvm;
     }
 }

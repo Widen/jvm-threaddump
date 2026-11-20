@@ -50,6 +50,10 @@ final class FakeJvm implements JvmSources
     long maxMemory = 512 * MB;
     Optional<String> procUptime = Optional.of("93784.56 12345.67\n");
     Set<Thread> liveThreads = new HashSet<>();
+    long nanoTime;
+    int pauses;
+    /** When set, {@code pause} advances the clock by this much and throws {@link InterruptedException}. */
+    Duration interruptPauseAfter;
 
     FakeJvm() {
         environment.put("HOSTNAME", "app-1");
@@ -82,6 +86,8 @@ final class FakeJvm implements JvmSources
         when(bean.findDeadlockedThreads()).thenReturn(null);
         when(bean.dumpAllThreads(anyBoolean(), anyBoolean()))
                 .thenAnswer(invocation -> threadInfos.toArray(new ThreadInfo[0]));
+        when(bean.getAllThreadIds())
+                .thenAnswer(invocation -> liveThreads.stream().mapToLong(Thread::getId).toArray());
         when(bean.isThreadCpuTimeSupported()).thenReturn(false);
         when(bean.isCurrentThreadCpuTimeSupported()).thenReturn(false);
         return bean;
@@ -202,5 +208,20 @@ final class FakeJvm implements JvmSources
     @Override
     public Set<Thread> liveThreads() {
         return liveThreads;
+    }
+
+    @Override
+    public void pause(Duration duration) throws InterruptedException {
+        pauses++;
+        if (interruptPauseAfter != null) {
+            nanoTime += interruptPauseAfter.toNanos();
+            throw new InterruptedException();
+        }
+        nanoTime += duration.toNanos();
+    }
+
+    @Override
+    public long nanoTime() {
+        return nanoTime;
     }
 }

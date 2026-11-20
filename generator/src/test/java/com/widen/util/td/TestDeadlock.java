@@ -1,5 +1,6 @@
 package com.widen.util.td;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -16,14 +17,18 @@ public class TestDeadlock
     @Test
     void reportsDeadlockedThreadsAndClearsThemAfterward() throws Exception {
         try (DeadlockFixture deadlock = DeadlockFixture.start()) {
-            String dump = JvmThreadDump.create().generate();
+            String dump = withoutSampling().generate();
             String[] fixtureIds = Arrays.stream(deadlock.threadIds())
                     .mapToObj(id -> "0x" + Long.toHexString(id))
                     .toArray(String[]::new);
             assertThat(deadlockedThreadIds(dump)).contains(fixtureIds);
         }
-        assertThat(JvmThreadDump.create().generate())
+        assertThat(withoutSampling().generate())
                 .contains("Deadlocked Threads: None");
+    }
+
+    private static JvmThreadDump withoutSampling() {
+        return JvmThreadDump.builder().sampleWindow(Duration.ZERO).build();
     }
 
     private static List<String> deadlockedThreadIds(String dump) {

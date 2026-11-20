@@ -1,18 +1,24 @@
 package com.widen.util.td;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import static com.widen.util.td.TestText.titled;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class TestJvmThreadDump
 {
@@ -71,6 +77,46 @@ public class TestJvmThreadDump
         customValues.put("Extra", "value");
 
         assertThat(dump.generate()).isEqualTo(before);
+    }
+
+    static Stream<Arguments> invalidWindows() {
+        return Stream.of(
+                Arguments.of(null, NullPointerException.class),
+                Arguments.of(Duration.ofMillis(-1), IllegalArgumentException.class));
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidWindows")
+    void rejectsANullOrNegativeWindow(Duration window, Class<? extends Throwable> expected) {
+        assertThatThrownBy(() -> JvmThreadDump.builder().sampleWindow(window)).isInstanceOf(expected);
+    }
+
+    @Test
+    void samplesForOneSecondByDefault() {
+        FakeJvm jvm = new FakeJvm();
+
+        JvmThreadDump.builder().jvmSources(jvm).build().generate();
+
+        assertThat(jvm.nanoTime).isEqualTo(1_000_000_000L);
+    }
+
+    @Test
+    void carriesItsSettingsIntoANewBuilder() {
+        FakeJvm jvm = new FakeJvm();
+        JvmThreadDump dump = JvmThreadDump.builder()
+                .jvmSources(jvm)
+                .mainArguments(Arrays.asList("--port", "8080"))
+                .customValues(Collections.singletonMap("App", "cheese"))
+                .sampleWindow(Duration.ofSeconds(5))
+                .build();
+
+        JvmThreadDump copy = dump.toBuilder().build();
+
+        assertThat(copy.sampleWindow()).isEqualTo(Duration.ofSeconds(5));
+        assertThat(copy.generate())
+                .contains(titled("Main Arguments", "--port 8080"))
+                .contains(titled("App", "cheese"))
+                .isEqualTo(dump.generate());
     }
 
     @Test

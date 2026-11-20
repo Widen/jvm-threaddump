@@ -21,8 +21,7 @@ public class ThreadDumpServlet extends HttpServlet
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         // No easy method to dynamically configure the threaddump class.
         // If using a custom implementation you are best off implementing your own servlet.
-        JvmThreadDumpImpl dump = new JvmThreadDumpImpl();
-        String out = dump.generate();
+        String out = JvmThreadDump.create().generate();
 
         resp.setContentType("text/plain");
         resp.setContentLength(out.length());

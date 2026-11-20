@@ -152,9 +152,9 @@ public class ThreadDumpRegistration implements ServletContextListener
 
 The dump opens with a `Findings` block. Nine checks read the JVM, and the block
 lists what looks abnormal, most serious first, with the evidence to act on: the
-thread names, the lock, the holder, the pool, and the frame a thread is stuck
-at. Each raw line a finding refers to ends with ` <<< ` and the finding's title,
-so the eye lands on it.
+thread names, the lock, the holder, the pool, and the frame where a thread is
+stuck. Each raw line a finding refers to ends with ` <<< ` and the finding's
+title, so the eye lands on it.
 
 ```text
               Findings: 3 of 9 checks flagged something (sampled over 1.0s)
@@ -185,11 +185,11 @@ When no check flags anything, the block is one line:
 
 `None` means the checks flagged nothing. It does not mean the JVM is healthy:
 the checks look for a fixed set of problems at fixed thresholds. The count
-covers the checks that ran. A check whose data is unavailable does not run and
-does not count. Three checks can be skipped this way: `CPU Saturated` when the
-JVM reports no CPU load, `File Descriptors` when the JVM's operating system bean
-is not a Unix one, and `Hot Threads` when per-thread CPU time is unsupported or
-disabled (or when no window ran).
+covers the checks that ran. A check whose data is unavailable skips itself and
+leaves the count. Three checks skip this way: `CPU Saturated` when the JVM
+reports no CPU load, `File Descriptors` when the JVM's operating system bean is
+not a Unix one, and `Hot Threads` when per-thread CPU time is unsupported or
+disabled, or when no window ran.
 
 ### The checks
 
@@ -222,8 +222,8 @@ Notes on the checks:
   three thread names. It marks no lines.
 - **Heap Full** needs both readings at 90%. The current usage includes garbage,
   so a healthy Parallel or Serial old generation passes 90% before every full
-  collection. The usage after the last collection can be hours old. A pool with
-  no after-collection reading, or no defined max, is not flagged.
+  collection. The usage after the last collection can be hours old. The check
+  skips a pool with no after-collection reading or no defined max.
 - **GC Overhead** leaves out collectors that report concurrent work instead of
   pauses (names that contain `Cycles` or `Concurrent`). The lifetime measure is
   an average since the JVM started, and runs with or without a window.
@@ -266,9 +266,9 @@ previous call by any caller in the JVM. With a window, the dump reads it at the
 window's start and again at its end, so the figure covers the window, or less
 when another caller, such as a metrics scrape or a second dump, reads the load
 during the window. With a zero window, the `CPU Saturated` check and the
-`CPU Load` line use one reading, which covers the time since the previous
-caller. In a container with a CPU limit, the JVM reports use of that limit
-instead of the host's load, so 0.90 means the container is close to being
+`CPU Load` line use one reading, which covers the time since the previous caller
+read the load. In a container with a CPU limit, the JVM reports use of that
+limit instead of the host's load, so 0.90 means the container is close to being
 throttled.
 
 ### The frame filter
@@ -286,7 +286,7 @@ of these rules:
 
 The top frame of a stack always prints, whatever its class, because it says what
 the thread is doing now. One line after the last frame gives the number of
-hidden frames, and the line is left out when none are hidden:
+hidden frames, and the dump omits the line when no frame is hidden:
 
 ```text
 "qtp-exec-12" priority=5 id=0x51 group=main cpu=412ms block_cnt=0 wait_cnt=3 RUNNABLE
@@ -301,8 +301,8 @@ hidden frames, and the line is left out when none are hidden:
 - `Builder.allFrames(true)` prints every frame in the thread list, with no count
   line. `/td?frames=all` does the same for one servlet request. Any other value
   of `frames` gets status 400 with the body `frames must be all`.
-- The frames a finding prints as evidence are always filtered, so the same JVM
-  state gives the same findings whatever the setting.
+- A finding always prints filtered frames as evidence, so the same JVM state
+  gives the same findings whatever the setting.
 - The rules are fixed. A consumer cannot add its own.
 
 ## Glossary

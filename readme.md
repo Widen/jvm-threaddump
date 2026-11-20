@@ -225,7 +225,8 @@ Notes on the checks:
   the top frame, the library frame when it differs from the top frame, and the
   first three thread names. It marks no lines.
 - **Heap Full** checks old-generation pools: heap pools whose name contains
-  `Old` or `Tenured`, and the JVM's only heap pool, such as the one that
+  `old` or `tenured` in any case, such as `G1 Old Gen` or OpenJ9's
+  `tenured-SOA`, and the JVM's only heap pool, such as the one that
   Shenandoah or non-generational ZGC reports. It needs both readings at 90%. The
   current usage includes garbage, so a healthy Parallel or Serial old generation
   passes 90% before every full collection. The usage after the last collection

@@ -221,7 +221,8 @@ Details per check:
    `org.apache.tomcat.`, `org.apache.catalina.`, `io.netty.`, and
    `com.zaxxer.hikari.`.
 4. **Heap Full.** An old-generation pool is a heap pool whose name contains
-   `Old` or `Tenured`, or the only heap pool the JVM reports, as with
+   `old` or `tenured` in any case, as in OpenJ9's `tenured-SOA`, or the only
+   heap pool the JVM reports, as with
    Shenandoah's `Shenandoah` pool and non-generational ZGC's `ZHeap`. Flag it
    when both readings are at 90% or more of its max: its current usage, and its
    usage after its last collection (`MemoryPoolMXBean.getCollectionUsage()`).

@@ -3,12 +3,14 @@ package com.widen.util.td;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.MemoryType;
 import java.lang.management.MemoryUsage;
 import java.lang.management.OperatingSystemMXBean;
 import java.lang.management.RuntimeMXBean;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -35,7 +37,8 @@ final class FakeJvm implements JvmSources
 
     RuntimeMXBean runtime = mockRuntime();
     MemoryMXBean memory = mockMemory();
-    ThreadMXBean threads = mockThreads();
+    final List<ThreadInfo> threadInfos = new ArrayList<>();
+    com.sun.management.ThreadMXBean threads = mockThreads();
     List<MemoryPoolMXBean> memoryPools = new ArrayList<>();
     List<GarbageCollectorMXBean> garbageCollectors = new ArrayList<>();
     OperatingSystemMXBean operatingSystem = mockOperatingSystem();
@@ -74,10 +77,11 @@ final class FakeJvm implements JvmSources
         return bean;
     }
 
-    private static ThreadMXBean mockThreads() {
-        ThreadMXBean bean = mock(ThreadMXBean.class);
+    private com.sun.management.ThreadMXBean mockThreads() {
+        com.sun.management.ThreadMXBean bean = mock(com.sun.management.ThreadMXBean.class);
         when(bean.findDeadlockedThreads()).thenReturn(null);
-        when(bean.dumpAllThreads(anyBoolean(), anyBoolean())).thenReturn(new ThreadInfo[0]);
+        when(bean.dumpAllThreads(anyBoolean(), anyBoolean()))
+                .thenAnswer(invocation -> threadInfos.toArray(new ThreadInfo[0]));
         when(bean.isThreadCpuTimeSupported()).thenReturn(false);
         when(bean.isCurrentThreadCpuTimeSupported()).thenReturn(false);
         return bean;
@@ -95,6 +99,39 @@ final class FakeJvm implements JvmSources
         when(bean.getProcessCpuLoad()).thenReturn(0.125);
         when(bean.getProcessCpuTime()).thenReturn(61_000_000_000L);
         return bean;
+    }
+
+    /**
+     * Adds a live thread and the matching {@link ThreadInfo} to what {@code dumpAllThreads} returns.
+     */
+    ThreadInfo addThread(String name, long id, Thread.State state, StackTraceElement... frames) {
+        liveThreads.add(FakeThreads.thread(name, id));
+        ThreadInfo info = FakeThreads.info(id, state, frames);
+        threadInfos.add(info);
+        return info;
+    }
+
+    MemoryPoolMXBean addPool(String name, MemoryType type, MemoryUsage usage, MemoryUsage collectionUsage) {
+        MemoryPoolMXBean pool = mock(MemoryPoolMXBean.class);
+        when(pool.getName()).thenReturn(name);
+        when(pool.getType()).thenReturn(type);
+        when(pool.getUsage()).thenReturn(usage);
+        when(pool.getCollectionUsage()).thenReturn(collectionUsage);
+        memoryPools.add(pool);
+        return pool;
+    }
+
+    GarbageCollectorMXBean addCollector(String name, long count, long timeMillis) {
+        GarbageCollectorMXBean collector = mock(GarbageCollectorMXBean.class);
+        when(collector.getName()).thenReturn(name);
+        when(collector.getCollectionCount()).thenReturn(count);
+        when(collector.getCollectionTime()).thenReturn(timeMillis);
+        garbageCollectors.add(collector);
+        return collector;
+    }
+
+    JvmSnapshot snapshot() {
+        return JvmSnapshot.read(this, Duration.ZERO);
     }
 
     @Override

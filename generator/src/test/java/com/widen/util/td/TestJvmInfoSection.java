@@ -3,6 +3,7 @@ package com.widen.util.td;
 import java.lang.management.OperatingSystemMXBean;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -28,7 +29,7 @@ public class TestJvmInfoSection
 {
     @Test
     void printsJvmAndHostInfo() {
-        assertThat(TestText.render(new JvmInfoSection(new FakeJvm(), emptyList(), emptyMap()).lines()))
+        assertThat(TestText.render(lines(new FakeJvm())))
                 .containsExactly(
                         titled("Current Time", "11/20/2026 15:30:00 UTC"),
                         titled("Default Time Zone", "Coordinated Universal Time (UTC)"),
@@ -60,7 +61,8 @@ public class TestJvmInfoSection
         custom.put("App", "cheese");
         custom.put("Build", 42);
 
-        assertThat(TestText.render(new JvmInfoSection(new FakeJvm(), Arrays.asList("--port", "8080"), custom).lines()))
+        FakeJvm jvm = new FakeJvm();
+        assertThat(TestText.render(new JvmInfoSection(jvm, jvm.snapshot(), Arrays.asList("--port", "8080"), custom).lines()))
                 .containsSubsequence(
                         titled("Temp Directory", "/tmp"),
                         "",
@@ -83,7 +85,7 @@ public class TestJvmInfoSection
         jvm.environment.clear();
         jvm.procUptime = uptime.isEmpty() ? Optional.empty() : Optional.of(uptime);
 
-        assertThat(TestText.render(new JvmInfoSection(jvm, emptyList(), emptyMap()).lines()))
+        assertThat(TestText.render(lines(jvm)))
                 .contains(
                         titled("Hostname", "Not Available"),
                         titled("System Memory", "Not Available"),
@@ -99,7 +101,7 @@ public class TestJvmInfoSection
         when(jvm.runtime.getUptime()).thenReturn(-1L);
         when(((com.sun.management.OperatingSystemMXBean) jvm.operatingSystem).getProcessCpuTime()).thenReturn(-1L);
 
-        assertThat(TestText.render(new JvmInfoSection(jvm, emptyList(), emptyMap()).lines()))
+        assertThat(TestText.render(lines(jvm)))
                 .contains(
                         titled("JVM Uptime", "Not Available"),
                         titled("JVM CPU Time", "Not Available"));
@@ -123,8 +125,7 @@ public class TestJvmInfoSection
         FakeJvm jvm = new FakeJvm();
         sample.accept((com.sun.management.OperatingSystemMXBean) jvm.operatingSystem);
 
-        assertThat(TestText.render(new JvmInfoSection(jvm, emptyList(), emptyMap()).lines()))
-                .contains(titled(title, "Not Available"));
+        assertThat(TestText.render(lines(jvm))).contains(titled(title, "Not Available"));
     }
 
     @ParameterizedTest
@@ -157,7 +158,11 @@ public class TestJvmInfoSection
         when(jvm.runtime.getInputArguments())
                 .thenReturn(Arrays.asList("-Dz.token=abc", "-Da=1", "-Xmx1g", "-javaagent:x.jar"));
 
-        assertThat(TestText.render(new JvmInfoSection(jvm, emptyList(), emptyMap()).lines()))
+        assertThat(TestText.render(lines(jvm)))
                 .containsSubsequence(titled("JVM System Props", "a=1"), continued("z.token=****"));
+    }
+
+    private static List<Line> lines(FakeJvm jvm) {
+        return new JvmInfoSection(jvm, jvm.snapshot(), emptyList(), emptyMap()).lines();
     }
 }

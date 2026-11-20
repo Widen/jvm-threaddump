@@ -10,7 +10,7 @@ public class TestDeadlockSection
 {
     @Test
     void printsNoneWithoutDeadlocks() {
-        assertThat(TestText.render(new DeadlockSection(new FakeJvm()).lines()))
+        assertThat(TestText.render(new DeadlockSection(new FakeJvm().snapshot()).lines()))
                 .containsExactly(titled("Deadlocked Threads", "None"));
     }
 
@@ -19,7 +19,7 @@ public class TestDeadlockSection
         FakeJvm jvm = new FakeJvm();
         when(jvm.threads.findDeadlockedThreads()).thenReturn(new long[] { 3, 26 });
 
-        assertThat(TestText.render(new DeadlockSection(jvm).lines()))
+        assertThat(TestText.render(new DeadlockSection(jvm.snapshot()).lines()))
                 .containsExactly(titled("Deadlocked Threads", "0x3, 0x1a"));
     }
 }

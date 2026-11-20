@@ -12,17 +12,16 @@ import static com.widen.util.td.Line.TitledLine;
  */
 final class DeadlockSection
 {
-    private final JvmSources jvm;
+    private final JvmSnapshot snapshot;
 
-    DeadlockSection(JvmSources jvm) {
-        this.jvm = jvm;
+    DeadlockSection(JvmSnapshot snapshot) {
+        this.snapshot = snapshot;
     }
 
     List<Line> lines() {
-        long[] deadlockedThreads = jvm.threads().findDeadlockedThreads();
-        String value = deadlockedThreads == null
+        String value = snapshot.deadlockedIds.length == 0
                 ? "None"
-                : Arrays.stream(deadlockedThreads).mapToObj(id -> "0x" + Long.toHexString(id)).collect(Collectors.joining(", "));
+                : Arrays.stream(snapshot.deadlockedIds).mapToObj(id -> "0x" + Long.toHexString(id)).collect(Collectors.joining(", "));
         return Collections.singletonList(new TitledLine("Deadlocked Threads", value));
     }
 }

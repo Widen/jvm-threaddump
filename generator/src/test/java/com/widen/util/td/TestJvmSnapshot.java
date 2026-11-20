@@ -184,13 +184,14 @@ public class TestJvmSnapshot
     }
 
     @Test
-    void finishesWithTheTimeThatElapsedWhenInterrupted() {
+    void isNotSampledWhenInterruptedPartWayThroughTheWindow() {
         FakeJvm jvm = new FakeJvm();
         jvm.interruptPauseAfter = Duration.ofMillis(250);
 
         JvmSnapshot snapshot = JvmSnapshot.read(jvm, Duration.ofSeconds(1));
 
-        assertThat(snapshot.windowNanos).isEqualTo(250_000_000L);
+        assertThat(snapshot.sampled()).isFalse();
+        assertThat(snapshot.windowNanos).isEqualTo(0);
         assertThat(Thread.interrupted()).isTrue();
     }
 

@@ -253,8 +253,9 @@ difference. The wait makes every dump take one window longer.
   count: `Findings: None (8 checks, not sampled)`.
 - A thread that is already interrupted when it calls `generate()` skips the
   window, and the dump reads `not sampled`. An interrupt during the window ends
-  the wait early: `generate()` sets the interrupt flag again and finishes the
-  dump with the time that passed.
+  the wait early and also leaves the dump `not sampled`, so no rate covers a
+  partial window. `generate()` sets the interrupt flag again and finishes the
+  dump.
 - `ThreadDumpServlet` takes the window from a request parameter, a whole number
   of seconds from 0 to 30: `/td?window=5` samples for five seconds, and
   `/td?window=0` returns at once. Any other value gets status 400 with the body

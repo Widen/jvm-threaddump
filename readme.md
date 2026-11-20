@@ -265,6 +265,9 @@ difference. The wait makes every dump take one window longer.
   `/td?window=0` returns at once. Any other value gets status 400 with the body
   `window must be a whole number of seconds from 0 to 30`. The limit keeps a
   request thread from sleeping longer than a typical proxy timeout.
+- Each `/td` request holds its container thread for the whole window: one
+  second by default, up to 30 seconds with `window=30`. The servlet does not
+  limit concurrent dumps, so expose `/td` only to trusted callers.
 
 CPU load has two caveats. `getSystemCpuLoad()` reports the load since the
 previous call by any caller in the JVM. With a window, the dump reads it at the

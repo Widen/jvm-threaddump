@@ -253,6 +253,17 @@ public class TestJvmSnapshot
         verify(jvm.threads, never()).getThreadAllocatedBytes(anyLong());
     }
 
+    @Test
+    void readsFileDescriptorCountsOnlyFromAUnixBean() {
+        FakeJvm unix = new FakeJvm();
+        unix.unixOperatingSystem(412, 65_536);
+
+        assertThat(unix.snapshot().openFileDescriptors).isEqualTo(412);
+        assertThat(unix.snapshot().maxFileDescriptors).isEqualTo(65_536);
+        assertThat(new FakeJvm().snapshot().openFileDescriptors).isEqualTo(-1);
+        assertThat(new FakeJvm().snapshot().maxFileDescriptors).isEqualTo(-1);
+    }
+
     private static FakeJvm jvmWithCpuAndAllocation() {
         FakeJvm jvm = new FakeJvm();
         when(jvm.threads.isThreadCpuTimeSupported()).thenReturn(true);

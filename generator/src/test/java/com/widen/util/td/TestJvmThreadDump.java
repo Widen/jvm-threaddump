@@ -40,6 +40,19 @@ public class TestJvmThreadDump
     }
 
     @Test
+    void countsNineChecksWithAWindow() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.enableCpuTime();
+        jvm.unixOperatingSystem(412, 65_536);
+        JvmThreadDump.Builder builder = JvmThreadDump.builder().jvmSources(jvm);
+
+        assertThat(builder.sampleWindow(Duration.ofSeconds(1)).build().generate())
+                .contains(titled("Findings", "None (9 checks, sampled over 1.0s)"));
+        assertThat(builder.sampleWindow(Duration.ZERO).build().generate())
+                .contains(titled("Findings", "None (8 checks, not sampled)"));
+    }
+
+    @Test
     void returnsTheSameDumpOnRepeatCalls() {
         JvmThreadDump dump = JvmThreadDump.builder().jvmSources(new FakeJvm()).build();
 

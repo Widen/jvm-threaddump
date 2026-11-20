@@ -42,7 +42,7 @@ final class ThreadSection
         for (Thread thread : jvm.liveThreads()) {
             ThreadInfo info = infos.get(thread.getId());
             if (info != null) {
-                threads.add(new ThreadSnapshot(thread, info, thread.getName()));
+                threads.add(new ThreadSnapshot(thread, info, thread.getName(), thread.toString()));
             }
         }
         threads.sort(ORDER);
@@ -84,7 +84,7 @@ final class ThreadSection
         }
 
         // skip the standard Thread.toString() and a toString() that repeats the name
-        String threadToString = thread.toString();
+        String threadToString = snapshot.toString;
         if (threadToString != null && !threadToString.startsWith("Thread[") && !threadToString.equalsIgnoreCase(name)) {
             header.append(format(" (%s)", threadToString));
         }
@@ -121,19 +121,21 @@ final class ThreadSection
     }
 
     /**
-     * A thread with the name read once, so a thread that renames itself cannot change its sort position or header
-     * mid-dump.
+     * A thread with its name and {@code toString()} read once, so a thread that renames itself cannot change its sort
+     * position or header mid-dump.
      */
     private static final class ThreadSnapshot
     {
         private final Thread thread;
         private final ThreadInfo info;
         private final String name;
+        private final String toString;
 
-        ThreadSnapshot(Thread thread, ThreadInfo info, String name) {
+        ThreadSnapshot(Thread thread, ThreadInfo info, String name, String toString) {
             this.thread = thread;
             this.info = info;
             this.name = name;
+            this.toString = toString;
         }
     }
 }

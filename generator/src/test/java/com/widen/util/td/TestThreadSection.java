@@ -139,6 +139,28 @@ public class TestThreadSection
                 .anyMatch(line -> line.contains(" cpu=1500ms "));
     }
 
+    @Test
+    void keepsTheNameReadBeforeSortingWhenAThreadRenamesItself() {
+        FakeJvm jvm = new FakeJvm();
+        Thread thread = FakeThreads.thread("before", 23);
+        jvm.liveThreads.add(thread);
+        ThreadInfo info = FakeThreads.info(23, Thread.State.RUNNABLE);
+        when(jvm.threads.dumpAllThreads(false, false)).thenReturn(new ThreadInfo[] {info});
+        when(jvm.threads.isThreadCpuTimeSupported()).thenReturn(true);
+        when(jvm.threads.isThreadCpuTimeEnabled()).thenReturn(true);
+        when(jvm.threads.getThreadCpuTime(23)).thenAnswer(invocation -> {
+            thread.setName("after");
+            return 0L;
+        });
+
+        List<String> text = TestText.render(new ThreadSection(jvm).lines());
+
+        assertThat(headersOf(text)).singleElement().satisfies(header -> {
+            assertThat(header).startsWith("\"before\"");
+            assertThat(header).doesNotContain("(after)");
+        });
+    }
+
     @ParameterizedTest
     @CsvSource(delimiter = '|', value = {"-1|-1", "0|0ms", "9999999999|9999ms", "10000000000|10s"})
     void formatsCpuTime(long nanos, String expected) {

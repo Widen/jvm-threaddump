@@ -2,10 +2,13 @@
 
 This project formats JVM info as simple text. It works well as a zero-configuration debugging tool for web-based applications.
 
-There are no classpath dependencies; all utility classes are included and package private.
+The generator module has no dependencies; all utility classes are included and
+package private.
 
-The servlet module does not bring in the Servlet API. The servlet container or
-your application must supply `javax.servlet:javax.servlet-api` 3.0.1 or later.
+The servlet module depends on the generator. It expects the servlet container or
+your application to supply `javax.servlet:javax.servlet-api` 3.0.1 through 4.x.
+Jakarta containers (Servlet 5 and later, such as Tomcat 10+ and Jetty 11+)
+are not supported.
 
 ## Usage
 
@@ -238,6 +241,16 @@ The version lives in `gradle.properties`. To publish, run:
 
 ```sh
 ./gradlew publish
+```
+
+The wrapper pins the Gradle distribution's checksum in
+`gradle/wrapper/gradle-wrapper.properties`. To upgrade Gradle, take the
+checksum from
+`https://services.gradle.org/distributions/gradle-VERSION-bin.zip.sha256` and
+run:
+
+```sh
+./gradlew wrapper --gradle-version VERSION --gradle-distribution-sha256-sum SUM
 ```
 
 A version that ends in `-SNAPSHOT` goes to the `libs-snapshots-local`

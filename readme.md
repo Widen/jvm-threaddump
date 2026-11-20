@@ -232,7 +232,9 @@ mise install
 `mise.toml` pins Java 21, which runs Gradle. The build compiles and tests with
 a Java 8 toolchain. Gradle downloads a Java 8 JDK when none is installed.
 
-Dependencies resolve from Maven Central, so building and testing need no
+When the JFrog credentials described below are set, dependencies resolve
+through the Acquia JFrog `widen-java-virtual` repository. Without them,
+dependencies resolve from Maven Central, so building and testing need no
 credentials.
 
 The version lives in `gradle.properties`. To publish to Acquia JFrog, run:

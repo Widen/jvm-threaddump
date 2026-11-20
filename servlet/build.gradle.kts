@@ -1,5 +1,5 @@
 plugins {
-    id("jvm-threaddump.java-library")
+    `java-library`
 }
 
 dependencies {

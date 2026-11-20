@@ -56,10 +56,13 @@ both, and fixes the review's bugs where the refactor touches them.
   other class is package-private and free to change.
 - **Coordinates:** group `widen`, artifacts `jvm-threaddump-generator` and
   `jvm-threaddump-servlet`. The Gradle project names stay the same.
-- **Repositories:** dependencies resolve from
-  `https://jfrog.ais.acquia.io/artifactory/widen-java-virtual/`. Credentials
-  come from the `ACQUIA_JFROG_USER` and `ACQUIA_JFROG_TOKEN` environment
-  variables, falling back to Gradle properties of the same names, as today.
+- **Repositories:** credentials come from the `ACQUIA_JFROG_USER` and
+  `ACQUIA_JFROG_TOKEN` environment variables, falling back to Gradle
+  properties of the same names. When both are set, dependencies resolve from
+  `https://jfrog.ais.acquia.io/artifactory/widen-java-virtual/`; otherwise
+  they resolve from Maven Central, so a build without credentials still runs.
+  Publishing requires the credentials and fails with an error naming the
+  missing ones.
 - **Java 8 test libraries:** JUnit 6 needs Java 17 and Mockito 5 needs Java 11,
   so tests use JUnit Jupiter 5.14.4, AssertJ 3.27.7, and Mockito 4.11.0.
 - **Tests on Java 8 do not see `ThreadInfo.getPriority()` or `isDaemon()`**,
@@ -124,12 +127,12 @@ it.
 - **Settings:** `settings.gradle.kts` includes `generator` and `servlet` and
   renames them to `jvm-threaddump-generator` and `jvm-threaddump-servlet`, as
   `settings.gradle` does today.
-- **Shared configuration:** a convention plugin in an included build,
-  `build-logic`, holds the shared setup: the `java-library` plugin, the
+- **Shared configuration:** a `subprojects {}` block in the root
+  `build.gradle.kts` holds the shared setup: the `java-library` plugin, the
   toolchain, the dependency repository, `maven-publish` with a sources JAR
   (`java { withSourcesJar() }`), the publish repository choice, and the JUnit
-  Platform for `test`. Both modules apply it. The root `build.gradle.kts`
-  holds nothing, or is removed if Gradle does not need it.
+  Platform for `test`. Module build files declare only their own
+  dependencies; a module with none has no build file.
 - **Version catalog:** `gradle/libs.versions.toml` holds every dependency and
   plugin version.
 - **Dependencies:** the servlet module uses
@@ -253,8 +256,7 @@ copies its subclass), and every bug fix above has a test that fails without it.
 These were the designer's calls, not decisions made together:
 
 - The servlet API becomes `compileOnly` in the servlet module.
-- A convention plugin in `build-logic` holds the shared build setup, and a
-  version catalog holds the versions.
+- A version catalog holds the versions.
 - The foojay resolver downloads a Java 8 JDK when none is installed.
 - Secret masking matches `password`, `secret`, `token`, `credential`, and
   `key` in property names.
@@ -266,6 +268,5 @@ These were the designer's calls, not decisions made together:
 
 - Names of the section classes and of `JvmSources`' accessors.
 - The duration formatter's shape, as long as it handles the formats above.
-- Whether the root `build.gradle.kts` exists.
 - How tests build fake `ThreadInfo` objects on Java 8, where the class has no
   public constructor: Mockito mocks or `ThreadInfo.from(CompositeData)`.

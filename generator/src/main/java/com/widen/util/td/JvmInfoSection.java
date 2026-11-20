@@ -34,11 +34,13 @@ final class JvmInfoSection
     private static final Pattern URL_PASSWORD = Pattern.compile("://[^/@:]*:[^/@]*@");
 
     private final JvmSources jvm;
+    private final JvmSnapshot snapshot;
     private final List<String> mainArguments;
     private final Map<String, ?> customValues;
 
-    JvmInfoSection(JvmSources jvm, List<String> mainArguments, Map<String, ?> customValues) {
+    JvmInfoSection(JvmSources jvm, JvmSnapshot snapshot, List<String> mainArguments, Map<String, ?> customValues) {
         this.jvm = jvm;
+        this.snapshot = snapshot;
         this.mainArguments = mainArguments;
         this.customValues = customValues;
     }
@@ -80,21 +82,18 @@ final class JvmInfoSection
             lines.add(new TitledLine("System Memory", freeMemory < 0 || totalMemory < 0
                     ? NOT_AVAILABLE
                     : format("%s available; %s total", byteCountToDisplaySize(freeMemory), byteCountToDisplaySize(totalMemory))));
-            double systemCpuLoad = sunOs.getSystemCpuLoad();
-            double processCpuLoad = sunOs.getProcessCpuLoad();
-            lines.add(new TitledLine("CPU Load", systemCpuLoad < 0 || processCpuLoad < 0
-                    ? NOT_AVAILABLE
-                    : format(Locale.US, "%.4f system; %.4f jvm (0.0 to 1.0)", systemCpuLoad, processCpuLoad)));
         }
         else {
             lines.add(new TitledLine("System Memory", NOT_AVAILABLE));
-            lines.add(new TitledLine("CPU Load", NOT_AVAILABLE));
         }
+        lines.add(new TitledLine("CPU Load", snapshot.systemCpuLoad < 0 || snapshot.processCpuLoad < 0
+                ? NOT_AVAILABLE
+                : format(Locale.US, "%.4f system; %.4f jvm (0.0 to 1.0)", snapshot.systemCpuLoad, snapshot.processCpuLoad)));
 
         long[] uptime = systemUptimeSeconds();
         lines.add(new TitledLine("System Uptime", formatTime(uptime[0], TimeUnit.SECONDS)));
         lines.add(new TitledLine("System Idle Time", formatTime(uptime[1], TimeUnit.SECONDS)));
-        lines.add(new TitledLine("JVM Uptime", formatTime(jvm.runtime().getUptime(), TimeUnit.MILLISECONDS)));
+        lines.add(new TitledLine("JVM Uptime", formatTime(snapshot.uptimeMillis, TimeUnit.MILLISECONDS)));
         lines.add(new TitledLine("JVM CPU Time", os instanceof com.sun.management.OperatingSystemMXBean
                 ? formatTime(((com.sun.management.OperatingSystemMXBean) os).getProcessCpuTime(), TimeUnit.NANOSECONDS)
                 : NOT_AVAILABLE));

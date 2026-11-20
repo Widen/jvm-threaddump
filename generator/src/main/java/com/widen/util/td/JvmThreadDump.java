@@ -1,5 +1,6 @@
 package com.widen.util.td;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -45,12 +46,13 @@ public final class JvmThreadDump
      * Reads the JVM now and returns the report.
      */
     public String generate() {
+        JvmSnapshot snapshot = JvmSnapshot.read(jvm, Duration.ZERO);
         List<Line> lines = new ArrayList<>();
-        lines.addAll(new JvmInfoSection(jvm, mainArguments, customValues).lines());
-        lines.addAll(new MemorySection(jvm).lines());
-        lines.addAll(new GcSection(jvm).lines());
-        lines.addAll(new DeadlockSection(jvm).lines());
-        lines.addAll(new ThreadSection(jvm).lines());
+        lines.addAll(new JvmInfoSection(jvm, snapshot, mainArguments, customValues).lines());
+        lines.addAll(new MemorySection(jvm, snapshot).lines());
+        lines.addAll(new GcSection(snapshot).lines());
+        lines.addAll(new DeadlockSection(snapshot).lines());
+        lines.addAll(new ThreadSection(snapshot).lines());
         return Line.render(lines);
     }
 

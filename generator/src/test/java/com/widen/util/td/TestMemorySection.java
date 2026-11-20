@@ -1,6 +1,6 @@
 package com.widen.util.td;
 
-import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.MemoryType;
 import java.lang.management.MemoryUsage;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -16,8 +16,6 @@ import static com.widen.util.td.FakeJvm.MB;
 import static com.widen.util.td.TestText.titled;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class TestMemorySection
 {
@@ -43,15 +41,14 @@ public class TestMemorySection
     void printsHeapSummaryAndPools() {
         FakeJvm jvm = new FakeJvm();
         String usage = MemorySection.formatUsage(POOL_USAGE);
-        jvm.memoryPools.addAll(Arrays.asList(
-                pool("Metaspace", POOL_USAGE),
-                pool("Some Pool", POOL_USAGE),
-                pool("G1 Old Gen", POOL_USAGE),
-                pool("Another Pool", POOL_USAGE),
-                pool("G1 Eden Space", POOL_USAGE),
-                pool("G1 Survivor Space", null)));
+        jvm.addPool("Metaspace", MemoryType.NON_HEAP, POOL_USAGE, null);
+        jvm.addPool("Some Pool", MemoryType.HEAP, POOL_USAGE, null);
+        jvm.addPool("G1 Old Gen", MemoryType.HEAP, POOL_USAGE, null);
+        jvm.addPool("Another Pool", MemoryType.HEAP, POOL_USAGE, null);
+        jvm.addPool("G1 Eden Space", MemoryType.HEAP, POOL_USAGE, null);
+        jvm.addPool("G1 Survivor Space", MemoryType.HEAP, null, null);
 
-        assertThat(TestText.render(new MemorySection(jvm).lines()))
+        assertThat(TestText.render(new MemorySection(jvm, jvm.snapshot()).lines()))
                 .containsExactly(
                         titled("JVM Free Memory", "100 MB (of committed)"),
                         titled("JVM Maximum Heap", "512 MB"),
@@ -91,10 +88,10 @@ public class TestMemorySection
     void printsKnownPoolsInCollectorOrder(List<String> reported, List<String> printed) {
         FakeJvm jvm = new FakeJvm();
         for (String name : reported) {
-            jvm.memoryPools.add(pool(name, POOL_USAGE));
+            jvm.addPool(name, MemoryType.HEAP, POOL_USAGE, null);
         }
 
-        List<String> lines = TestText.render(new MemorySection(jvm).lines());
+        List<String> lines = TestText.render(new MemorySection(jvm, jvm.snapshot()).lines());
         List<String> poolLines = lines.subList(lines.indexOf(titled("Collector", "used/committed, used/max")) + 1,
                 lines.size() - 1);
         List<String> titles = new ArrayList<>();
@@ -109,13 +106,7 @@ public class TestMemorySection
         FakeJvm jvm = new FakeJvm();
         jvm.maxMemory = Long.MAX_VALUE;
 
-        assertThat(TestText.render(new MemorySection(jvm).lines())).contains(titled("JVM Maximum Heap", "unlimited"));
-    }
-
-    private static MemoryPoolMXBean pool(String name, MemoryUsage usage) {
-        MemoryPoolMXBean pool = mock(MemoryPoolMXBean.class);
-        when(pool.getName()).thenReturn(name);
-        when(pool.getUsage()).thenReturn(usage);
-        return pool;
+        assertThat(TestText.render(new MemorySection(jvm, jvm.snapshot()).lines()))
+                .contains(titled("JVM Maximum Heap", "unlimited"));
     }
 }

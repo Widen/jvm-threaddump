@@ -1,7 +1,6 @@
 package com.widen.util.td;
 
 import java.lang.management.ThreadInfo;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -15,7 +14,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import static com.widen.util.td.TestText.titled;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.when;
 
 public class TestThreadSection
@@ -87,14 +85,11 @@ public class TestThreadSection
         FakeJvm jvm = new FakeJvm();
         long[] ids = {23, 3, 12, 2, 5, 6, 7, 9, 8};
         String[] names = {"worker-1", "worker-12", "Worker", "worker1", "b", "A", "a", "pool", "pool"};
-        ThreadInfo[] infos = new ThreadInfo[names.length];
         for (int i = 0; i < names.length; i++) {
-            jvm.liveThreads.add(FakeThreads.thread(names[i], ids[i]));
-            infos[i] = FakeThreads.info(ids[i], Thread.State.RUNNABLE);
+            jvm.addThread(names[i], ids[i], Thread.State.RUNNABLE);
         }
-        when(jvm.threads.dumpAllThreads(anyBoolean(), anyBoolean())).thenReturn(infos);
 
-        List<String> text = TestText.render(new ThreadSection(jvm).lines());
+        List<String> text = TestText.render(new ThreadSection(jvm.snapshot()).lines());
 
         assertThat(text.get(0)).isEqualTo(titled("Thread Count", "9"));
         assertThat(headersOf(text)).containsExactly(
@@ -105,12 +100,11 @@ public class TestThreadSection
     @Test
     void printsOnlyThreadsInBothSnapshots() {
         FakeJvm jvm = new FakeJvm();
-        jvm.liveThreads.addAll(Arrays.asList(FakeThreads.thread("gone", 50), FakeThreads.thread("kept", 61)));
-        ThreadInfo orphan = FakeThreads.info(60, Thread.State.RUNNABLE);
-        ThreadInfo kept = FakeThreads.info(61, Thread.State.RUNNABLE);
-        when(jvm.threads.dumpAllThreads(anyBoolean(), anyBoolean())).thenReturn(new ThreadInfo[] {orphan, kept});
+        jvm.liveThreads.add(FakeThreads.thread("gone", 50));
+        jvm.threadInfos.add(FakeThreads.info(60, Thread.State.RUNNABLE));
+        jvm.addThread("kept", 61, Thread.State.RUNNABLE);
 
-        List<String> text = TestText.render(new ThreadSection(jvm).lines());
+        List<String> text = TestText.render(new ThreadSection(jvm.snapshot()).lines());
 
         assertThat(text.get(0)).isEqualTo(titled("Thread Count", "1"));
         assertThat(headersOf(text)).containsExactly(header("kept", 61));
@@ -129,24 +123,20 @@ public class TestThreadSection
     @Test
     void printsCpuTimeWhenEnabled() {
         FakeJvm jvm = new FakeJvm();
-        jvm.liveThreads.add(FakeThreads.thread("worker-1", 23));
-        ThreadInfo info = FakeThreads.info(23, Thread.State.RUNNABLE);
-        when(jvm.threads.dumpAllThreads(anyBoolean(), anyBoolean())).thenReturn(new ThreadInfo[] {info});
+        jvm.addThread("worker-1", 23, Thread.State.RUNNABLE);
         when(jvm.threads.isThreadCpuTimeSupported()).thenReturn(true);
         when(jvm.threads.isThreadCpuTimeEnabled()).thenReturn(true);
         when(jvm.threads.getThreadCpuTime(23)).thenReturn(1_500_000_000L);
 
-        assertThat(TestText.render(new ThreadSection(jvm).lines()))
+        assertThat(TestText.render(new ThreadSection(jvm.snapshot()).lines()))
                 .anyMatch(line -> line.contains(" cpu=1500ms "));
     }
 
     @Test
     void keepsTheNameReadBeforeSortingWhenAThreadRenamesItself() {
         FakeJvm jvm = new FakeJvm();
-        Thread thread = FakeThreads.thread("before", 23);
-        jvm.liveThreads.add(thread);
-        ThreadInfo info = FakeThreads.info(23, Thread.State.RUNNABLE);
-        when(jvm.threads.dumpAllThreads(anyBoolean(), anyBoolean())).thenReturn(new ThreadInfo[] {info});
+        jvm.addThread("before", 23, Thread.State.RUNNABLE);
+        Thread thread = jvm.liveThreads.iterator().next();
         when(jvm.threads.isThreadCpuTimeSupported()).thenReturn(true);
         when(jvm.threads.isThreadCpuTimeEnabled()).thenReturn(true);
         when(jvm.threads.getThreadCpuTime(23)).thenAnswer(invocation -> {
@@ -154,7 +144,7 @@ public class TestThreadSection
             return 0L;
         });
 
-        List<String> text = TestText.render(new ThreadSection(jvm).lines());
+        List<String> text = TestText.render(new ThreadSection(jvm.snapshot()).lines());
 
         assertThat(headersOf(text)).singleElement().satisfies(header -> {
             assertThat(header).startsWith("\"before\"");
@@ -189,8 +179,8 @@ public class TestThreadSection
     private static List<Line> lines(Thread thread, ThreadInfo info) {
         FakeJvm jvm = new FakeJvm();
         jvm.liveThreads.add(thread);
-        when(jvm.threads.dumpAllThreads(anyBoolean(), anyBoolean())).thenReturn(new ThreadInfo[] {info});
-        return new ThreadSection(jvm).lines();
+        jvm.threadInfos.add(info);
+        return new ThreadSection(jvm.snapshot()).lines();
     }
 
     private static List<String> headersOf(List<String> text) {

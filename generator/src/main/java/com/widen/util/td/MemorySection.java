@@ -1,6 +1,5 @@
 package com.widen.util.td;
 
-import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.MemoryUsage;
 import java.text.NumberFormat;
 import java.util.ArrayList;
@@ -38,9 +37,11 @@ final class MemorySection
     private static final String USAGE_LABEL = "used/committed, used/max";
 
     private final JvmSources jvm;
+    private final JvmSnapshot snapshot;
 
-    MemorySection(JvmSources jvm) {
+    MemorySection(JvmSources jvm, JvmSnapshot snapshot) {
         this.jvm = jvm;
+        this.snapshot = snapshot;
     }
 
     List<Line> lines() {
@@ -61,11 +62,8 @@ final class MemorySection
 
         lines.add(new TitledLine("Collector", USAGE_LABEL));
         Map<String, MemoryUsage> pools = new TreeMap<>();
-        for (MemoryPoolMXBean pool : jvm.memoryPools()) {
-            MemoryUsage usage = pool.getUsage();
-            if (usage != null) {
-                pools.put(pool.getName(), usage);
-            }
+        for (PoolSnapshot pool : snapshot.pools) {
+            pools.put(pool.name, pool.usage);
         }
         for (String name : POOL_ORDER) {
             MemoryUsage usage = pools.remove(name);

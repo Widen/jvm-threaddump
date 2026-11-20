@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -82,7 +83,7 @@ final class MemorySection
      * or negative (an undefined maximum is -1) prints as 0%.
      */
     static String formatUsage(MemoryUsage usage) {
-        NumberFormat percentFormat = NumberFormat.getPercentInstance();
+        NumberFormat percentFormat = NumberFormat.getPercentInstance(Locale.US);
         String percents = format("%s/%s",
                 percentFormat.format(ratio(usage.getUsed(), usage.getCommitted())),
                 percentFormat.format(ratio(usage.getUsed(), usage.getMax())));

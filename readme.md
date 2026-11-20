@@ -7,7 +7,8 @@ There are no classpath dependencies; all utility classes are included and packag
 ## Usage
 
 Direct instantiation:
-```
+
+```text
 import com.widen.util.td.ThreadDumpServlet;
 
 JvmThreadDump out = new JvmThreadDump();
@@ -16,7 +17,8 @@ System.out.println(dump);
 ```
 
 Servlet configuration:
-```
+
+```text
 <web-app>
   <servlet>
     <servlet-name>threaddump</servlet-name>
@@ -39,10 +41,9 @@ Overridable methods for customization:
   - Useful if you have environment specific information to aid in debugging the application.
   - `String.valueOf(...)` is used to generate a text representation of the value Object.
 
+The supplied servlet does not support using a custom `JvmThreadDump` class. We recommend that you copy `ThreadDumpServlet.java` into your source tree and modify as required.
 
-The supplied servlet does not support using a custom `JvmThreadDump` class. We recommend that you copy  `ThreadDumpServlet.java` into your source tree and modify as required.
-
-```
+```text
 public class MyAppThreadDumpServlet extends HttpServlet
 {
     private final String appName;
@@ -108,7 +109,7 @@ public class MyAppThreadDumpServlet extends HttpServlet
 
 ## Example Output
 
-```
+```text
           Current Time: 01/30/2019 11:18:17 CST
      Default Time Zone: Central Standard Time (America/Chicago)
           Java Version: 1.8.0_191-b12 (Oracle Corporation)
@@ -212,6 +213,33 @@ Compressed Class Space: 81%/0%        init=0 bytes     used=827 KB      commit=1
 
 "Signal Dispatcher" daemon priority=9 id=0x4 group=system cpu=0ms block_cnt=0 wait_cnt=0 RUNNABLE
 ```
+
+## Build
+
+Install the tools, then run the tests:
+
+```sh
+mise install
+./gradlew test
+```
+
+`mise.toml` pins Java 21, which runs Gradle. The build compiles and tests with
+a Java 8 toolchain. Gradle downloads a Java 8 JDK when none is installed.
+
+Every build resolves dependencies from the JFrog `widen-java-virtual`
+repository, so every build needs the credentials in `ACQUIA_JFROG_USER` and
+`ACQUIA_JFROG_TOKEN`. Set them as environment variables, or as Gradle
+properties of the same names, for example in `~/.gradle/gradle.properties`.
+
+The version lives in `gradle.properties`. To publish, run:
+
+```sh
+./gradlew publish
+```
+
+A version that ends in `-SNAPSHOT` goes to the `libs-snapshots-local`
+repository. Any other version goes to `libs-releases-local`. Publishing uses
+the same JFrog credentials.
 
 ## License
 

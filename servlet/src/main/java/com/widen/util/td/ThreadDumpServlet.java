@@ -2,6 +2,7 @@ package com.widen.util.td;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -27,7 +28,7 @@ public class ThreadDumpServlet extends HttpServlet
      * Serves the output of the given dump, which is generated again on every request.
      */
     public ThreadDumpServlet(JvmThreadDump dump) {
-        this.dump = dump;
+        this.dump = Objects.requireNonNull(dump, "dump");
     }
 
     @Override

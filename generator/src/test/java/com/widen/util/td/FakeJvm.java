@@ -117,6 +117,17 @@ final class FakeJvm implements JvmSources
         return info;
     }
 
+    /**
+     * Adds a thread that reports {@code ownerId} as the owner of the lock it waits for.
+     */
+    ThreadInfo addThreadWaitingOn(String name, long id, Thread.State state, long ownerId, String lockName,
+            StackTraceElement... frames) {
+        ThreadInfo info = addThread(name, id, state, frames);
+        when(info.getLockOwnerId()).thenReturn(ownerId);
+        when(info.getLockName()).thenReturn(lockName);
+        return info;
+    }
+
     MemoryPoolMXBean addPool(String name, MemoryType type, MemoryUsage usage, MemoryUsage collectionUsage) {
         MemoryPoolMXBean pool = mock(MemoryPoolMXBean.class);
         when(pool.getName()).thenReturn(name);

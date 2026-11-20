@@ -141,6 +141,24 @@ public class TestJvmThreadDump
     }
 
     @Test
+    void filtersAFindingsFramesEvenWhenTheDumpPrintsAllFrames() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("h", 10, Thread.State.RUNNABLE,
+                FakeThreads.frame("com.example.H", "work"),
+                FakeThreads.frame("$H_1a", "work"),
+                FakeThreads.frame("com.example.H", "run"));
+        TestLockPileUpCheck.addWaiters(jvm, 6, 10);
+
+        String dump = JvmThreadDump.builder().jvmSources(jvm).sampleWindow(Duration.ZERO).allFrames(true).build()
+                .generate();
+        int threadList = dump.indexOf("Thread Count");
+
+        assertThat(dump.substring(threadList)).contains("$H_1a.work");
+        assertThat(dump.substring(0, threadList)).contains("6 threads wait on a lock held by \"h\"")
+                .doesNotContain("$H_1a.work");
+    }
+
+    @Test
     void acceptsUnmodifiableCustomValues() {
         String dump = JvmThreadDump.builder()
                 .jvmSources(new FakeJvm())

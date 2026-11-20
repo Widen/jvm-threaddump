@@ -1,101 +1,47 @@
 package com.widen.util.td;
 
-import java.io.FileInputStream;
 import java.lang.management.GarbageCollectorMXBean;
-import java.lang.management.ManagementFactory;
-import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.MemoryUsage;
-import java.lang.management.RuntimeMXBean;
-import java.lang.management.ThreadMXBean;
 import java.text.NumberFormat;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Scanner;
 import java.util.Set;
-import java.util.TimeZone;
 import java.util.TreeSet;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-
-import com.sun.management.OperatingSystemMXBean;
 
 import static com.widen.util.td.BytesUtils.byteCountToDisplaySize;
 import static com.widen.util.td.Line.BlankLine;
-import static com.widen.util.td.Line.MultiLine;
 import static com.widen.util.td.Line.TitledLine;
-import static java.lang.String.format;
-import static java.lang.System.getProperty;
 
 public class JvmThreadDumpImpl implements JvmThreadDump
 {
 
     private List<Line> lines = new ArrayList<>();
 
-    private static final RuntimeMXBean runtimeBean = ManagementFactory.getRuntimeMXBean();
-    private static final OperatingSystemMXBean osBean = (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
-    private static final MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
-    private static final List<MemoryPoolMXBean> memoryPoolBeans = ManagementFactory.getMemoryPoolMXBeans();
-    private static final List<GarbageCollectorMXBean> gcBeans = ManagementFactory.getGarbageCollectorMXBeans();
-    private static final ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
+    private final JvmSources jvm;
 
     public JvmThreadDumpImpl() {
+        this(JvmSources.platform());
+    }
+
+    JvmThreadDumpImpl(JvmSources jvm) {
+        this.jvm = jvm;
     }
 
     @Override
     public String generate() {
-        doJvmInfo();
+        lines.addAll(new JvmInfoSection(jvm, getMainArguments(), getCustomValues()).lines());
         doJvmMemory();
         doGc();
         doDeadlocks();
         doThreads();
 
         return Line.render(lines);
-    }
-
-    private void doJvmInfo() {
-        lines.add(new TitledLine("Current Time", new SimpleDateFormat("MM/dd/yyyy HH:mm:ss z").format(new Date())));
-        lines.add(new TitledLine("Default Time Zone", TimeZone.getDefault().getDisplayName() + " (" + TimeZone.getDefault().getID() + ")"));
-        lines.add(new TitledLine("Java Version", format("%s (%s)", getProperty("java.runtime.version"), getProperty("java.vendor"))));
-        lines.add(new TitledLine("Java VM", format("%s (%s)", getProperty("java.vm.version"), getProperty("java.vm.info"))));
-        lines.add(new TitledLine("Java Home", getProperty("java.home")));
-        lines.add(new TitledLine("Working Directory", getProperty("user.dir")));
-        lines.add(new TitledLine("Temp Directory", getProperty("java.io.tmpdir")));
-        lines.add(new BlankLine());
-
-        Map<String, Object> custom = getCustomValues();
-        if (!custom.isEmpty()) {
-            for (Map.Entry<String, Object> entry : custom.entrySet()) {
-                lines.add(new TitledLine(entry.getKey(), String.valueOf(entry.getValue())));
-            }
-            lines.add(new BlankLine());
-        }
-
-        lines.add(new TitledLine("Main Arguments", String.join(" ", getMainArguments())));
-        lines.add(new TitledLine("Default Encoding", getProperty("file.encoding")));
-        lines.add(new MultiLine("JVM System Props", systemProperties()));
-        lines.add(new BlankLine());
-
-        lines.add(new TitledLine("Hostname", Optional.ofNullable(System.getenv("HOSTNAME")).orElse("Not Available")));
-        lines.add(new TitledLine("Operating System", format("%s (%s)", osBean.getName(), osBean.getVersion())));
-        lines.add(new TitledLine("System Processors", format("%s %s", osBean.getAvailableProcessors(), osBean.getArch())));
-        lines.add(new TitledLine("System Memory", String.format("%s available; %s total", byteCountToDisplaySize(osBean.getFreePhysicalMemorySize()), byteCountToDisplaySize(osBean.getTotalPhysicalMemorySize()))));
-        lines.add(new TitledLine("CPU Load", String.format("%.4f system; %.4f jvm (0.0 to 1.0)", osBean.getSystemCpuLoad(), osBean.getProcessCpuLoad())));
-
-        Uptime systemUptime = systemUptimeSeconds();
-        lines.add(new TitledLine("System Uptime", formatTime(systemUptime.uptime, TimeUnit.SECONDS)));
-        lines.add(new TitledLine("System Idle Time", formatTime(systemUptime.idletime, TimeUnit.SECONDS)));
-        lines.add(new TitledLine("JVM Uptime", formatTime(runtimeBean.getUptime(), TimeUnit.MILLISECONDS)));
-        lines.add(new TitledLine("JVM CPU Time", formatTime(osBean.getProcessCpuTime(), TimeUnit.NANOSECONDS)));
-        lines.add(new BlankLine());
     }
 
     /**
@@ -110,43 +56,6 @@ public class JvmThreadDumpImpl implements JvmThreadDump
      */
     protected Map<String, Object> getCustomValues() {
         return Collections.emptyMap();
-    }
-
-    private Collection<String> systemProperties() {
-        return runtimeBean.getInputArguments().stream()
-                .filter(s -> s.startsWith("-D"))
-                .map(s -> s.substring(2))
-                .collect(Collectors.toCollection(TreeSet::new));
-    }
-
-    private String formatTime(long value, TimeUnit unit) {
-        if (value == -1) {
-            return "Not Available";
-        }
-        long millis = unit.toMillis(value);
-        return Durations.daysHoursMinutesSeconds(millis);
-    }
-
-    private Uptime systemUptimeSeconds() {
-        try (Scanner scanner = new Scanner(new FileInputStream("/proc/uptime"))) {
-            String uptime = scanner.next();
-            String idleTime = scanner.next();
-            return new Uptime(Double.valueOf(uptime).longValue(), Double.valueOf(idleTime).longValue());
-        }
-        catch (Exception e) {
-            return new Uptime(-1, -1);
-        }
-    }
-
-    private class Uptime
-    {
-        long uptime;
-        long idletime;
-
-        Uptime(long uptime, long idletime) {
-            this.uptime = uptime;
-            this.idletime = idletime;
-        }
     }
 
     private String formatMemoryUsage(MemoryUsage usage) {
@@ -164,18 +73,18 @@ public class JvmThreadDumpImpl implements JvmThreadDump
     }
 
     private void doJvmMemory() {
-        lines.add(new TitledLine("JVM Free Memory", String.format("%s (of committed)", byteCountToDisplaySize(Runtime.getRuntime().freeMemory()))));
-        lines.add(new TitledLine("JVM Maximum Heap", Runtime.getRuntime().maxMemory() == Long.MAX_VALUE ? "unlimited" : byteCountToDisplaySize(Runtime.getRuntime().maxMemory())));
+        lines.add(new TitledLine("JVM Free Memory", String.format("%s (of committed)", byteCountToDisplaySize(jvm.freeMemory()))));
+        lines.add(new TitledLine("JVM Maximum Heap", jvm.maxMemory() == Long.MAX_VALUE ? "unlimited" : byteCountToDisplaySize(jvm.maxMemory())));
 
-        Set<String> memoryArgs = runtimeBean.getInputArguments().stream()
+        Set<String> memoryArgs = jvm.runtime().getInputArguments().stream()
                 .filter(s -> s.startsWith("-X"))
                 .collect(Collectors.toCollection(TreeSet::new));
         lines.add(new TitledLine("JVM Memory Args", String.join(" ", memoryArgs)));
         lines.add(new BlankLine());
 
         lines.add(new TitledLine("Memory", "used/max"));
-        lines.add(new TitledLine("Heap", formatMemoryUsage(memoryBean.getHeapMemoryUsage())));
-        lines.add(new TitledLine("Non Heap", formatMemoryUsage(memoryBean.getNonHeapMemoryUsage())));
+        lines.add(new TitledLine("Heap", formatMemoryUsage(jvm.memory().getHeapMemoryUsage())));
+        lines.add(new TitledLine("Non Heap", formatMemoryUsage(jvm.memory().getNonHeapMemoryUsage())));
         lines.add(new BlankLine());
 
         // "PS Eden Space", "PS Survivor Space", "PS Old Gen" == -XX:+UseParallelGC, Sun Parallel GC
@@ -192,7 +101,7 @@ public class JvmThreadDumpImpl implements JvmThreadDump
 
         List<String> printedPools = new ArrayList<>();
         Map<String, MemoryUsage> pools = new HashMap<>();
-        for (MemoryPoolMXBean memoryPool : memoryPoolBeans) {
+        for (MemoryPoolMXBean memoryPool : jvm.memoryPools()) {
             pools.put(memoryPool.getName(), memoryPool.getUsage());
         }
         for (String poolKey : poolPrintOrder) {
@@ -213,14 +122,14 @@ public class JvmThreadDumpImpl implements JvmThreadDump
     }
 
     private void doGc() {
-        for (GarbageCollectorMXBean gc : gcBeans) {
+        for (GarbageCollectorMXBean gc : jvm.garbageCollectors()) {
             lines.add(new TitledLine("GC " + gc.getName(), String.format("spent %s doing %d collections", Durations.hoursMinutesSecondsMillis(gc.getCollectionTime()), gc.getCollectionCount())));
         }
         lines.add(new Line.BlankLine());
     }
 
     private void doDeadlocks() {
-        long[] deadlockedThreads = threadBean.findDeadlockedThreads();
+        long[] deadlockedThreads = jvm.threads().findDeadlockedThreads();
         if (deadlockedThreads != null) {
             List<String> ids = Arrays.stream(deadlockedThreads).mapToObj(l -> "0x" + Long.toHexString(l)).collect(Collectors.toList());
             lines.add(new TitledLine("Deadlocked Threads", String.join(", ", ids)));

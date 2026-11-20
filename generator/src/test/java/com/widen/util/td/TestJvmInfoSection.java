@@ -5,10 +5,14 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static com.widen.util.td.TestText.continued;
@@ -16,6 +20,7 @@ import static com.widen.util.td.TestText.titled;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -98,6 +103,28 @@ public class TestJvmInfoSection
                 .contains(
                         titled("JVM Uptime", "Not Available"),
                         titled("JVM CPU Time", "Not Available"));
+    }
+
+    static Stream<Arguments> printsNotAvailableForUnsampledOsValues() {
+        return Stream.of(
+                arguments("System Memory", (Consumer<com.sun.management.OperatingSystemMXBean>) os ->
+                        when(os.getFreePhysicalMemorySize()).thenReturn(-1L)),
+                arguments("System Memory", (Consumer<com.sun.management.OperatingSystemMXBean>) os ->
+                        when(os.getTotalPhysicalMemorySize()).thenReturn(-1L)),
+                arguments("CPU Load", (Consumer<com.sun.management.OperatingSystemMXBean>) os ->
+                        when(os.getSystemCpuLoad()).thenReturn(-1.0)),
+                arguments("CPU Load", (Consumer<com.sun.management.OperatingSystemMXBean>) os ->
+                        when(os.getProcessCpuLoad()).thenReturn(-1.0)));
+    }
+
+    @ParameterizedTest
+    @MethodSource
+    void printsNotAvailableForUnsampledOsValues(String title, Consumer<com.sun.management.OperatingSystemMXBean> sample) {
+        FakeJvm jvm = new FakeJvm();
+        sample.accept((com.sun.management.OperatingSystemMXBean) jvm.operatingSystem);
+
+        assertThat(TestText.render(new JvmInfoSection(jvm, emptyList(), emptyMap()).lines()))
+                .contains(titled(title, "Not Available"));
     }
 
     @ParameterizedTest

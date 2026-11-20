@@ -75,8 +75,16 @@ final class JvmInfoSection
         lines.add(new TitledLine("System Processors", format("%s %s", os.getAvailableProcessors(), os.getArch())));
         if (os instanceof com.sun.management.OperatingSystemMXBean) {
             com.sun.management.OperatingSystemMXBean sunOs = (com.sun.management.OperatingSystemMXBean) os;
-            lines.add(new TitledLine("System Memory", format("%s available; %s total", byteCountToDisplaySize(sunOs.getFreePhysicalMemorySize()), byteCountToDisplaySize(sunOs.getTotalPhysicalMemorySize()))));
-            lines.add(new TitledLine("CPU Load", format(Locale.US, "%.4f system; %.4f jvm (0.0 to 1.0)", sunOs.getSystemCpuLoad(), sunOs.getProcessCpuLoad())));
+            long freeMemory = sunOs.getFreePhysicalMemorySize();
+            long totalMemory = sunOs.getTotalPhysicalMemorySize();
+            lines.add(new TitledLine("System Memory", freeMemory < 0 || totalMemory < 0
+                    ? NOT_AVAILABLE
+                    : format("%s available; %s total", byteCountToDisplaySize(freeMemory), byteCountToDisplaySize(totalMemory))));
+            double systemCpuLoad = sunOs.getSystemCpuLoad();
+            double processCpuLoad = sunOs.getProcessCpuLoad();
+            lines.add(new TitledLine("CPU Load", systemCpuLoad < 0 || processCpuLoad < 0
+                    ? NOT_AVAILABLE
+                    : format(Locale.US, "%.4f system; %.4f jvm (0.0 to 1.0)", systemCpuLoad, processCpuLoad)));
         }
         else {
             lines.add(new TitledLine("System Memory", NOT_AVAILABLE));

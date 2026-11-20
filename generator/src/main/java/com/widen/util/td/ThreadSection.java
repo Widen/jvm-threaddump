@@ -19,10 +19,10 @@ import static java.lang.String.format;
  */
 final class ThreadSection
 {
-    private static final Comparator<Thread> ORDER = Comparator
-            .comparing(Thread::getName, String.CASE_INSENSITIVE_ORDER)
-            .thenComparing(Thread::getName)
-            .thenComparingLong(Thread::getId);
+    private static final Comparator<ThreadSnapshot> ORDER = Comparator
+            .comparing((ThreadSnapshot snapshot) -> snapshot.name, String.CASE_INSENSITIVE_ORDER)
+            .thenComparing(snapshot -> snapshot.name)
+            .thenComparingLong(snapshot -> snapshot.thread.getId());
 
     private final JvmSources jvm;
 
@@ -38,10 +38,11 @@ final class ThreadSection
         for (ThreadInfo info : threadBean.dumpAllThreads(false, false)) {
             infos.put(info.getThreadId(), info);
         }
-        List<Thread> threads = new ArrayList<>();
+        List<ThreadSnapshot> threads = new ArrayList<>();
         for (Thread thread : jvm.liveThreads()) {
-            if (infos.containsKey(thread.getId())) {
-                threads.add(thread);
+            ThreadInfo info = infos.get(thread.getId());
+            if (info != null) {
+                threads.add(new ThreadSnapshot(thread, info, thread.getName()));
             }
         }
         threads.sort(ORDER);
@@ -49,10 +50,11 @@ final class ThreadSection
         List<Line> lines = new ArrayList<>();
         lines.add(new TitledLine("Thread Count", String.valueOf(threads.size())));
         lines.add(new BlankLine());
-        for (Thread thread : threads) {
-            ThreadInfo info = infos.get(thread.getId());
+        for (ThreadSnapshot snapshot : threads) {
+            Thread thread = snapshot.thread;
+            ThreadInfo info = snapshot.info;
             long cpuTimeNanos = cpuTimeEnabled ? threadBean.getThreadCpuTime(thread.getId()) : -1;
-            lines.add(new SimpleLine(formatHeader(thread, info, cpuTimeNanos)));
+            lines.add(new SimpleLine(formatHeader(snapshot, cpuTimeNanos)));
             for (StackTraceElement frame : info.getStackTrace()) {
                 lines.add(new SimpleLine(formatFrame(frame)));
             }
@@ -61,8 +63,10 @@ final class ThreadSection
         return lines;
     }
 
-    private static String formatHeader(Thread thread, ThreadInfo info, long cpuTimeNanos) {
-        String name = thread.getName();
+    private static String formatHeader(ThreadSnapshot snapshot, long cpuTimeNanos) {
+        Thread thread = snapshot.thread;
+        ThreadInfo info = snapshot.info;
+        String name = snapshot.name;
         ThreadGroup group = thread.getThreadGroup();
         StringBuilder header = new StringBuilder(format("\"%s\"%s priority=%d id=0x%x group=%s cpu=%s block_cnt=%d wait_cnt=%d %s",
                 name, thread.isDaemon() ? " daemon" : "", thread.getPriority(), thread.getId(),
@@ -114,5 +118,22 @@ final class ThreadSection
             sb.append("(Unknown Source)");
         }
         return sb.toString();
+    }
+
+    /**
+     * A thread with the name read once, so a thread that renames itself cannot change its sort position or header
+     * mid-dump.
+     */
+    private static final class ThreadSnapshot
+    {
+        private final Thread thread;
+        private final ThreadInfo info;
+        private final String name;
+
+        ThreadSnapshot(Thread thread, ThreadInfo info, String name) {
+            this.thread = thread;
+            this.info = info;
+            this.name = name;
+        }
     }
 }

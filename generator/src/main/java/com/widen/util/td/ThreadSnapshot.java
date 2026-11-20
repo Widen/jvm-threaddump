@@ -34,6 +34,11 @@ final class ThreadSnapshot
         return thread.getId();
     }
 
+    /** The name and id as findings print them, such as {@code "worker-3" (0x1f)}. */
+    String label() {
+        return "\"" + name + "\" (0x" + Long.toHexString(id()) + ")";
+    }
+
     Thread.State state() {
         return info.getThreadState();
     }

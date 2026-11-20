@@ -42,6 +42,7 @@ final class JvmSnapshot
     final boolean cpuTimeAvailable;
     final boolean allocationAvailable;
     final long generatingThreadId;
+    private final LockGraph locks;
 
     private JvmSnapshot(List<ThreadSnapshot> threads, long[] deadlockedIds, List<PoolSnapshot> pools,
             List<GcSnapshot> collectors, double systemCpuLoad, double processCpuLoad, long uptimeMillis,
@@ -57,6 +58,7 @@ final class JvmSnapshot
         this.cpuTimeAvailable = cpuTimeAvailable;
         this.allocationAvailable = allocationAvailable;
         this.generatingThreadId = generatingThreadId;
+        this.locks = LockGraph.of(threads);
     }
 
     /**
@@ -165,6 +167,21 @@ final class JvmSnapshot
 
     boolean sampled() {
         return windowNanos > 0;
+    }
+
+    /** Who waits on whom for a lock, built once from {@link #threads}. */
+    LockGraph locks() {
+        return locks;
+    }
+
+    /** Returns the thread with the id, or null when the snapshot holds none. */
+    ThreadSnapshot thread(long id) {
+        for (ThreadSnapshot thread : threads) {
+            if (thread.id() == id) {
+                return thread;
+            }
+        }
+        return null;
     }
 
     /**

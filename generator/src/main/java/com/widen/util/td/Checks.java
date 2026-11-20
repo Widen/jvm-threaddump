@@ -1,5 +1,6 @@
 package com.widen.util.td;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -8,7 +9,9 @@ import java.util.List;
  */
 final class Checks
 {
-    static final List<Check> ALL = Collections.unmodifiableList(Collections.<Check>emptyList());
+    static final List<Check> ALL = Collections.unmodifiableList(Arrays.<Check>asList(
+            new DeadlockCheck(),
+            new LockPileUpCheck()));
 
     private Checks() {
     }

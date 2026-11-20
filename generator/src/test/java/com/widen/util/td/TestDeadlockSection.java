@@ -15,11 +15,18 @@ public class TestDeadlockSection
     }
 
     @Test
-    void printsDeadlockedIdsInHex() {
+    void printsTheCycleThreadsByName() {
+        assertThat(TestText.render(new DeadlockSection(TestDeadlockCheck.deadlockOfAAndB().snapshot()).lines()))
+                .containsExactly(titled("Deadlocked Threads", "\"a\" (0x1), \"b\" (0x2)"));
+    }
+
+    @Test
+    void printsTheJvmsThreadsWhenItFindsNoCycle() {
         FakeJvm jvm = new FakeJvm();
-        when(jvm.threads.findDeadlockedThreads()).thenReturn(new long[] { 3, 26 });
+        jvm.addThread("a", 1, Thread.State.RUNNABLE);
+        when(jvm.threads.findDeadlockedThreads()).thenReturn(new long[] { 1, 99 });
 
         assertThat(TestText.render(new DeadlockSection(jvm.snapshot()).lines()))
-                .containsExactly(titled("Deadlocked Threads", "0x3, 0x1a"));
+                .containsExactly(titled("Deadlocked Threads", "\"a\" (0x1), 0x63"));
     }
 }

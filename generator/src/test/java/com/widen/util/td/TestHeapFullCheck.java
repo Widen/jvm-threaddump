@@ -28,7 +28,6 @@ public class TestHeapFullCheck
             "G1 Old Gen,       HEAP,     4000, 3800, 3599, false",
             "G1 Old Gen,       HEAP,     4000, 3800,     , false",
             "G1 Old Gen,       HEAP,     4000, 3800,    0, false",
-            "G1 Eden Space,    HEAP,     4000, 3880, 3840, false",
             "Old Things,       NON_HEAP, 4000, 3880, 3840, false",
             "G1 Old Gen,       HEAP,       -1, 3880, 3840, false" })
     void flagsAnOldPoolOnlyWhenBothReadingsAreHigh(String name, MemoryType type, long maxMb, long usedMb,
@@ -36,6 +35,21 @@ public class TestHeapFullCheck
         FakeJvm jvm = new FakeJvm();
         jvm.addPool(name, type, usage(usedMb, maxMb),
                 usedAfterCollectionMb == null ? null : usage(usedAfterCollectionMb, maxMb));
+
+        assertThat(new HeapFullCheck().findings(jvm.snapshot())).hasSize(flagged ? 1 : 0);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "ZHeap,          false, true",
+            "ZHeap,          true,  false",
+            "G1 Eden Space,  true,  false" })
+    void countsTheOnlyHeapPoolAsOldGeneration(String name, boolean withSecondHeapPool, boolean flagged) {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addPool(name, MemoryType.HEAP, usage(3880, 4000), usage(3840, 4000));
+        if (withSecondHeapPool) {
+            jvm.addPool("G1 Survivor Space", MemoryType.HEAP, usage(3880, 4000), usage(3840, 4000));
+        }
 
         assertThat(new HeapFullCheck().findings(jvm.snapshot())).hasSize(flagged ? 1 : 0);
     }

@@ -216,19 +216,20 @@ Details per check:
    `org.apache.tomcat.`, `org.apache.catalina.`, `io.netty.`, and
    `com.zaxxer.hikari.`. A thread with an empty stack is idle.
 4. **Heap Full.** An old-generation pool is a heap pool whose name contains
-   `Old` or `Tenured`. Flag it when both readings are at 90% or more of its
-   max: its current usage, and its usage after its last collection
-   (`MemoryPoolMXBean.getCollectionUsage()`). Neither reading is enough alone.
-   Current usage includes garbage, so a Parallel or Serial old generation
-   passes 90% before every full collection on a healthy JVM. The
-   after-collection reading updates only when an old-generation collection
-   runs (on Java 8, only a full collection, even for G1), so it can be hours
-   old, and on Java 17 G1 it can stay far above what the pool holds now.
-   Requiring both means the finding never disagrees with the pool line it
-   marks. A pool with no after-collection reading (null, or zero bytes used)
-   is not flagged: a heap that is really full forces an old-generation
-   collection, which sets the reading. A pool with an undefined max is
-   skipped. Print both percentages. When a window ran, add the top 3
+   `Old` or `Tenured`, or the only heap pool the JVM reports, as with
+   Shenandoah's `Shenandoah` pool and non-generational ZGC's `ZHeap`. Flag it
+   when both readings are at 90% or more of its max: its current usage, and its
+   usage after its last collection (`MemoryPoolMXBean.getCollectionUsage()`).
+   Neither reading is enough alone. Current usage includes garbage, so a
+   Parallel or Serial old generation passes 90% before every full collection on
+   a healthy JVM. The after-collection reading updates only when an
+   old-generation collection runs (on Java 8, only a full collection, even for
+   G1), so it can be hours old, and on Java 17 G1 it can stay far above what the
+   pool holds now. Requiring both means the finding never disagrees with the
+   pool line it marks. A pool with no after-collection reading (null, or zero
+   bytes used) is not flagged: a heap that is really full forces an
+   old-generation collection, which sets the reading. A pool with an undefined
+   max is skipped. Print both percentages. When a window ran, add the top 3
    allocating threads with their MB per second. Marks the pool's line.
 5. **Metadata Full.** The 90% rule on current usage alone, for `Metaspace`,
    `Compressed Class Space`, `Code Cache`, and the `CodeHeap` pools, when the

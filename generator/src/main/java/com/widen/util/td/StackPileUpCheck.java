@@ -22,6 +22,22 @@ final class StackPileUpCheck implements Check
     private static final List<String> LIBRARY_PREFIXES = Arrays.asList(
             "org.eclipse.jetty.", "org.apache.tomcat.", "org.apache.catalina.", "io.netty.", "com.zaxxer.hikari.");
 
+    /** The {@code class#method} keys of the native waits a {@code RUNNABLE} thread idles in, on Java 8 and later. */
+    private static final Set<String> NATIVE_WAITS = new HashSet<>(Arrays.asList(
+            "sun.nio.ch.EPoll#wait",
+            "sun.nio.ch.EPollArrayWrapper#epollWait",
+            "sun.nio.ch.KQueue#poll",
+            "sun.nio.ch.KQueueArrayWrapper#kevent0",
+            "sun.nio.ch.WEPoll#wait",
+            "sun.nio.ch.WindowsSelectorImpl$SubSelector#poll0",
+            "sun.nio.ch.Net#poll",
+            "sun.nio.ch.Net#accept",
+            "sun.nio.ch.ServerSocketChannelImpl#accept0",
+            "java.net.PlainSocketImpl#socketAccept",
+            "io.netty.channel.epoll.Native#epollWait",
+            "io.netty.channel.epoll.Native#epollWait0",
+            "io.netty.channel.kqueue.Native#keventWait"));
+
     @Override
     public boolean applies(JvmSnapshot snapshot) {
         return true;
@@ -62,16 +78,19 @@ final class StackPileUpCheck implements Check
     }
 
     /**
-     * True when the thread is {@code WAITING}, {@code TIMED_WAITING}, or {@code RUNNABLE} and no frame of its stack is
-     * application code, or when its stack is empty. A {@code RUNNABLE} thread with only library frames is parked in
-     * native code, such as an event loop in {@code epoll_wait}. A {@code BLOCKED} thread is never idle.
+     * True when the stack is empty, when the thread is {@code RUNNABLE} and its top frame is a selector, poll, or
+     * accept wait in {@link #NATIVE_WAITS} whatever the frames below it, or when the thread is {@code WAITING} or
+     * {@code TIMED_WAITING} and no frame of its stack is application code. A {@code BLOCKED} thread is never idle.
      */
     static boolean idle(ThreadSnapshot thread) {
         StackTraceElement[] stack = thread.stack();
         if (stack.length == 0) {
             return true;
         }
-        if (thread.state() == Thread.State.BLOCKED) {
+        if (thread.state() == Thread.State.RUNNABLE) {
+            return NATIVE_WAITS.contains(callKey(stack[0]));
+        }
+        if (thread.state() != Thread.State.WAITING && thread.state() != Thread.State.TIMED_WAITING) {
             return false;
         }
         for (StackTraceElement frame : stack) {

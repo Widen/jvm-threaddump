@@ -11,7 +11,8 @@ final class Checks
 {
     static final List<Check> ALL = Collections.unmodifiableList(Arrays.<Check>asList(
             new DeadlockCheck(),
-            new LockPileUpCheck()));
+            new LockPileUpCheck(),
+            new StackPileUpCheck()));
 
     private Checks() {
     }

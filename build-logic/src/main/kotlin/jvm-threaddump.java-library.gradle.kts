@@ -8,10 +8,13 @@ fun jfrogCredential(name: String): String =
         ?: providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
         ?: throw GradleException("Set $name in the environment or in ~/.gradle/gradle.properties")
 
+val jfrogUser = jfrogCredential("ACQUIA_JFROG_USER")
+val jfrogToken = jfrogCredential("ACQUIA_JFROG_TOKEN")
+
 fun MavenArtifactRepository.useJfrogCredentials() {
     credentials {
-        username = jfrogCredential("ACQUIA_JFROG_USER")
-        password = jfrogCredential("ACQUIA_JFROG_TOKEN")
+        username = jfrogUser
+        password = jfrogToken
     }
     authentication {
         create<BasicAuthentication>("basic")

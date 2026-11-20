@@ -70,10 +70,10 @@ String out = dump.generate();
 ```
 
 A `JvmThreadDump` is immutable and safe to share between threads. The builder
-copies the list and the map, so later changes to them do not affect the dump.
+copies the list and the map, so later changes to them leave the dump unchanged.
 
 To serve a customized dump, extend `ThreadDumpServlet` and pass the built dump
-to its constructor. The servlet generates the dump again on every request.
+to its constructor. The servlet regenerates the dump on every request.
 
 ```java
 import java.util.Arrays;
@@ -101,8 +101,8 @@ public class MyAppThreadDumpServlet extends ThreadDumpServlet
 }
 ```
 
-A container creates a servlet from `web.xml` only through a public no-arg
-constructor, so register a servlet that has constructor arguments in code.
+A container instantiates a servlet from `web.xml` only through a public no-arg
+constructor. Register a servlet that needs constructor arguments in code.
 
 ```java
 import javax.servlet.ServletContextEvent;
@@ -130,7 +130,7 @@ public class ThreadDumpRegistration implements ServletContextListener
   [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
   [JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)
 - `System Uptime`: Linux only; parsed from file `/proc/uptime`
-- `Main Arguments`: Will be empty unless the builder sets `mainArguments`.
+- `Main Arguments`: Empty unless the builder sets `mainArguments`.
 - `JVM System Props`: The `-D` values print as `****` when the key contains
   `password`, `secret`, `token`, `credential`, or `key`, or when the value
   contains one of those words followed by `=`.

@@ -62,15 +62,16 @@ final class StackPileUpCheck implements Check
     }
 
     /**
-     * True when the thread is {@code WAITING} or {@code TIMED_WAITING} and no frame of its stack is application code,
-     * or when its stack is empty.
+     * True when the thread is {@code WAITING}, {@code TIMED_WAITING}, or {@code RUNNABLE} and no frame of its stack is
+     * application code, or when its stack is empty. A {@code RUNNABLE} thread with only library frames is parked in
+     * native code, such as an event loop in {@code epoll_wait}. A {@code BLOCKED} thread is never idle.
      */
     static boolean idle(ThreadSnapshot thread) {
         StackTraceElement[] stack = thread.stack();
         if (stack.length == 0) {
             return true;
         }
-        if (thread.state() != Thread.State.WAITING && thread.state() != Thread.State.TIMED_WAITING) {
+        if (thread.state() == Thread.State.BLOCKED) {
             return false;
         }
         for (StackTraceElement frame : stack) {

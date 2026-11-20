@@ -214,12 +214,14 @@ Notes on the checks:
   `Deadlock` and stays out of `Lock Pile-up` and `Stack Pile-up`.
 - **Stack Pile-up** groups threads by the top frame of the stack and the first
   frame outside the JDK that the frame filter keeps, so it names the library a
-  thread is stuck in, such as a drained connection pool. Idle threads, such as a
-  `WAITING` server worker with no application code on its stack, stay out of the
-  count, as do the thread that generates the dump and every thread counted in a
-  `Lock Pile-up`. The finding prints the count, the count per thread state, the
-  top frame, the library frame when it differs from the top frame, and the first
-  three thread names. It marks no lines.
+  thread is stuck in, such as a drained connection pool. Idle threads stay out
+  of the count. A thread is idle when it is `WAITING`, `TIMED_WAITING`, or
+  `RUNNABLE` and no application code is on its stack, such as a server worker
+  waiting for a job or a Netty event loop in `epoll_wait`; a `BLOCKED` thread is
+  never idle. The thread that generates the dump and every thread counted in a
+  `Lock Pile-up` also stay out of the count. The finding prints the count, the
+  count per thread state, the top frame, the library frame when it differs from
+  the top frame, and the first three thread names. It marks no lines.
 - **Heap Full** needs both readings at 90%. The current usage includes garbage,
   so a healthy Parallel or Serial old generation passes 90% before every full
   collection. The usage after the last collection can be hours old. The check

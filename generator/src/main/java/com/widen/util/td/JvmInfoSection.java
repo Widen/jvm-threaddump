@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.widen.util.td.BytesUtils.byteCountToDisplaySize;
+import static com.widen.util.td.Durations.NOT_AVAILABLE;
 import static com.widen.util.td.Line.BlankLine;
 import static com.widen.util.td.Line.MultiLine;
 import static com.widen.util.td.Line.TitledLine;
@@ -26,7 +27,6 @@ import static java.lang.String.format;
  */
 final class JvmInfoSection
 {
-    private static final String NOT_AVAILABLE = "Not Available";
     private static final String MASK = "****";
     private static final List<String> SECRET_WORDS = Arrays.asList("password", "secret", "token", "credential", "key");
 

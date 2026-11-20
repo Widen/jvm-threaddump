@@ -4,7 +4,7 @@ import java.util.concurrent.TimeUnit;
 
 final class Durations
 {
-    private static final String NOT_AVAILABLE = "Not Available";
+    static final String NOT_AVAILABLE = "Not Available";
 
     private Durations() {
     }

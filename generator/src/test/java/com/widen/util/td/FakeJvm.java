@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TimeZone;
 
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -76,7 +77,7 @@ final class FakeJvm implements JvmSources
     private static ThreadMXBean mockThreads() {
         ThreadMXBean bean = mock(ThreadMXBean.class);
         when(bean.findDeadlockedThreads()).thenReturn(null);
-        when(bean.dumpAllThreads(false, false)).thenReturn(new ThreadInfo[0]);
+        when(bean.dumpAllThreads(anyBoolean(), anyBoolean())).thenReturn(new ThreadInfo[0]);
         when(bean.isThreadCpuTimeSupported()).thenReturn(false);
         when(bean.isCurrentThreadCpuTimeSupported()).thenReturn(false);
         return bean;

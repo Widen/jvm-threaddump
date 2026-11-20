@@ -1,8 +1,7 @@
-.DS_Store
 *.iml
-build
-/.idea/misc.xml
-/.idea/workspace.xml
+.DS_Store
 .gradle
+.idea
 .kotlin
-/out
+build
+out

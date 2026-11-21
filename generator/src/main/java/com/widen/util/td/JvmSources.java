@@ -61,7 +61,7 @@ interface JvmSources
     Optional<String> procUptime();
 
     /**
-     * @return the keys of {@link Thread#getAllStackTraces()}
+     * @return every live platform thread, read without walking the stacks
      */
     Set<Thread> liveThreads();
 

@@ -13,6 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -92,7 +94,18 @@ final class PlatformJvmSources implements JvmSources
 
     @Override
     public Set<Thread> liveThreads() {
-        return Thread.getAllStackTraces().keySet();
+        ThreadGroup root = Thread.currentThread().getThreadGroup();
+        while (root.getParent() != null) {
+            root = root.getParent();
+        }
+        // enumerate drops the threads that do not fit, so the array grows until it has room to spare.
+        Thread[] threads = new Thread[root.activeCount() + 16];
+        int count = root.enumerate(threads);
+        while (count == threads.length) {
+            threads = new Thread[threads.length * 2];
+            count = root.enumerate(threads);
+        }
+        return new HashSet<>(Arrays.asList(threads).subList(0, count));
     }
 
     @Override

@@ -18,6 +18,7 @@ public class TestMetadataFullCheck
             "Metaspace,                         1000, 899, false",
             "Compressed Class Space,            1000, 950, true",
             "Code Cache,                        1000, 950, true",
+            "CodeCache,                         1000, 950, true",
             "CodeHeap 'profiled nmethods',      1000, 950, true",
             "Metaspace,                           -1, 950, false",
             "G1 Old Gen,                        1000, 950, false" })

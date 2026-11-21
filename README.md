@@ -232,13 +232,14 @@ something on every dump teaches people to skip it:
   Every frame outside the JDK, Jetty, Tomcat, Netty, and HikariCP counts as
   application code, so ten idle workers of another library, such as Quartz, show
   as a pile-up on every dump until `Builder.idleLibraryPrefixes` names that
-  library. A `RUNNABLE` thread is idle when its top frame is a selector, poll,
-  or accept wait, such as `sun.nio.ch.EPoll.wait` under a Netty or XNIO event
-  loop, whatever the frames below it. A `BLOCKED` thread is never idle. The
-  thread that generates the dump and every thread counted in a `Lock Pile-up`
-  also stay out of the count. The finding prints the count, the count per thread
-  state, the top frame, the library frame when it differs from the top frame,
-  and the first three thread names. It marks no lines.
+  library; [Customization](#customization) lists the built-in prefixes. A
+  `RUNNABLE` thread is idle when its top frame is a selector, poll, or accept
+  wait, such as `sun.nio.ch.EPoll.wait` under a Netty or XNIO event loop,
+  whatever the frames below it. A `BLOCKED` thread is never idle. The thread
+  that generates the dump and every thread counted in a `Lock Pile-up` also stay
+  out of the count. The finding prints the count, the count per thread state,
+  the top frame, the library frame when it differs from the top frame, and the
+  first three thread names. It marks no lines.
 - **Heap Full** checks old-generation pools: heap pools whose name contains
   `old` or `tenured` in any case, such as `G1 Old Gen` or OpenJ9's
   `tenured-SOA`, and the JVM's only heap pool, such as the one that Shenandoah
@@ -350,7 +351,12 @@ Build a customized dump with `JvmThreadDump.builder()`:
 - `idleLibraryPrefixes(List<String>)` names the packages of server and pool
   libraries whose waiting worker threads `Stack Pile-up` should treat as idle,
   such as `org.quartz.`. A prefix matches every class whose name starts with it.
-  The default is an empty list.
+  The default is an empty list. The prefixes add to the built-in ones:
+  - JDK: `java.`, `javax.`, `jdk.`, `sun.`, `com.sun.`
+  - Jetty: `org.eclipse.jetty.`
+  - Tomcat: `org.apache.tomcat.`, `org.apache.catalina.`
+  - Netty: `io.netty.`
+  - HikariCP: `com.zaxxer.hikari.`
 
 ```java
 import java.util.Arrays;

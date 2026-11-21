@@ -33,6 +33,14 @@ public class TestFileDescriptorsCheck
     }
 
     @Test
+    void doesNotFlagAFewOpenDescriptorsUnderAnUnlimitedLimit() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.unixOperatingSystem(62, Long.MAX_VALUE);
+
+        assertThat(new FileDescriptorsCheck().findings(jvm.snapshot())).isEmpty();
+    }
+
+    @Test
     void doesNotApplyWithoutTheUnixBean() {
         assertThat(new FileDescriptorsCheck().applies(new FakeJvm().snapshot())).isFalse();
     }

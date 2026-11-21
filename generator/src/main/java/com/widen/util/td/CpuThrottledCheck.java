@@ -29,7 +29,7 @@ final class CpuThrottledCheck implements Check
         List<String> lines = new ArrayList<>();
         long windowThrottled = snapshot.windowCpuThrottledPeriods;
         long windowPeriods = snapshot.windowCpuPeriods;
-        if (snapshot.sampled() && windowThrottled >= MIN_WINDOW_THROTTLED_PERIODS
+        if (snapshot.sampled() && windowPeriods > 0 && windowThrottled >= MIN_WINDOW_THROTTLED_PERIODS
                 && windowThrottled * 100 >= MIN_WINDOW_PERCENT * windowPeriods) {
             lines.add(String.format(Locale.US,
                     "the kernel throttled this container in %d of %d periods (%d%%) of the last %.1fs",

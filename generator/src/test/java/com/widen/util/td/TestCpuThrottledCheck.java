@@ -22,7 +22,8 @@ public class TestCpuThrottledCheck
             "2, 8,  true",
             "2, 2,  true",
             "1, 1,  false",
-            "0, 10, false" })
+            "0, 10, false",
+            "2, 0,  false" })
     void flagsAThrottledWindow(long throttled, long periods, boolean flagged) {
         FakeJvm jvm = new FakeJvm();
         jvm.cgroupV2(100_000, 1_000, 0);

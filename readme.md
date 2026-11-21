@@ -228,14 +228,17 @@ something on every dump teaches people to skip it:
   frame outside the JDK that the frame filter keeps, so it names the library a
   thread is stuck in, such as a drained connection pool. Idle threads stay out
   of the count. A `WAITING` or `TIMED_WAITING` thread is idle when no
-  application code is on its stack, such as a server worker waiting for a job. A
-  `RUNNABLE` thread is idle when its top frame is a selector, poll, or accept
-  wait, such as `sun.nio.ch.EPoll.wait` under a Netty or XNIO event loop,
-  whatever the frames below it. A `BLOCKED` thread is never idle. The thread
-  that generates the dump and every thread counted in a `Lock Pile-up` also stay
-  out of the count. The finding prints the count, the count per thread state,
-  the top frame, the library frame when it differs from the top frame, and the
-  first three thread names. It marks no lines.
+  application code is on its stack, such as a server worker waiting for a job.
+  Every frame outside the JDK, Jetty, Tomcat, Netty, and HikariCP counts as
+  application code, so ten idle workers of another library, such as Quartz, show
+  as a pile-up on every dump until `Builder.idleLibraryPrefixes` names that
+  library. A `RUNNABLE` thread is idle when its top frame is a selector, poll,
+  or accept wait, such as `sun.nio.ch.EPoll.wait` under a Netty or XNIO event
+  loop, whatever the frames below it. A `BLOCKED` thread is never idle. The
+  thread that generates the dump and every thread counted in a `Lock Pile-up`
+  also stay out of the count. The finding prints the count, the count per thread
+  state, the top frame, the library frame when it differs from the top frame,
+  and the first three thread names. It marks no lines.
 - **Heap Full** checks old-generation pools: heap pools whose name contains
   `old` or `tenured` in any case, such as `G1 Old Gen` or OpenJ9's
   `tenured-SOA`, and the JVM's only heap pool, such as the one that Shenandoah
@@ -344,6 +347,10 @@ Build a customized dump with `JvmThreadDump.builder()`:
   default is one second, and zero skips sampling.
 - `allFrames(boolean)` prints every stack frame in the thread list when true.
   The default is false.
+- `idleLibraryPrefixes(List<String>)` names the packages of server and pool
+  libraries whose waiting worker threads `Stack Pile-up` should treat as idle,
+  such as `org.quartz.`. A prefix matches every class whose name starts with it.
+  The default is an empty list.
 
 ```java
 import java.util.Arrays;

@@ -23,14 +23,18 @@ public final class JvmThreadDump
     private final Map<String, ?> customValues;
     private final Duration sampleWindow;
     private final boolean allFrames;
+    private final List<String> idleLibraryPrefixes;
+    private final List<Check> checks;
 
     private JvmThreadDump(JvmSources jvm, List<String> mainArguments, Map<String, ?> customValues,
-            Duration sampleWindow, boolean allFrames) {
+            Duration sampleWindow, boolean allFrames, List<String> idleLibraryPrefixes) {
         this.jvm = jvm;
         this.mainArguments = mainArguments;
         this.customValues = customValues;
         this.sampleWindow = sampleWindow;
         this.allFrames = allFrames;
+        this.idleLibraryPrefixes = idleLibraryPrefixes;
+        this.checks = Checks.all(idleLibraryPrefixes);
     }
 
     /**
@@ -56,7 +60,8 @@ public final class JvmThreadDump
                 .mainArguments(mainArguments)
                 .customValues(customValues)
                 .sampleWindow(sampleWindow)
-                .allFrames(allFrames);
+                .allFrames(allFrames)
+                .idleLibraryPrefixes(idleLibraryPrefixes);
     }
 
     Duration sampleWindow() {
@@ -74,7 +79,7 @@ public final class JvmThreadDump
      */
     public String generate() {
         JvmSnapshot snapshot = JvmSnapshot.read(jvm, sampleWindow);
-        Findings findings = Findings.run(snapshot, Checks.ALL);
+        Findings findings = Findings.run(snapshot, checks);
         List<Line> lines = new ArrayList<>();
         lines.addAll(new FindingsSection(findings, snapshot).lines());
         lines.addAll(new JvmInfoSection(jvm, snapshot, findings, mainArguments, customValues).lines());
@@ -96,6 +101,7 @@ public final class JvmThreadDump
         private Map<String, ?> customValues = Collections.emptyMap();
         private Duration sampleWindow = Duration.ofSeconds(1);
         private boolean allFrames;
+        private List<String> idleLibraryPrefixes = Collections.emptyList();
 
         private Builder() {
         }
@@ -147,14 +153,27 @@ public final class JvmThreadDump
             return this;
         }
 
+        /**
+         * Sets package prefixes of server and pool libraries, such as {@code org.quartz.}, that the Stack Pile-up
+         * check treats like the ones it already knows: a waiting thread whose stack holds only frames of the JDK and
+         * of these libraries is idle, and the check leaves it out. A prefix matches every class whose name starts
+         * with it, so end it with a dot. The default is an empty list.
+         *
+         * @throws NullPointerException if the list is null
+         */
+        public Builder idleLibraryPrefixes(List<String> idleLibraryPrefixes) {
+            this.idleLibraryPrefixes = Objects.requireNonNull(idleLibraryPrefixes, "idleLibraryPrefixes");
+            return this;
+        }
+
         Builder jvmSources(JvmSources jvm) {
             this.jvm = Objects.requireNonNull(jvm, "jvm");
             return this;
         }
 
         /**
-         * Copies the main arguments and custom values, so later changes to the caller's collections
-         * do not affect the dump.
+         * Copies the main arguments, custom values, and idle library prefixes, so later changes to the caller's
+         * collections do not affect the dump.
          */
         public JvmThreadDump build() {
             return new JvmThreadDump(
@@ -162,7 +181,8 @@ public final class JvmThreadDump
                     Collections.unmodifiableList(new ArrayList<>(mainArguments)),
                     Collections.unmodifiableMap(new LinkedHashMap<>(customValues)),
                     sampleWindow,
-                    allFrames);
+                    allFrames,
+                    Collections.unmodifiableList(new ArrayList<>(idleLibraryPrefixes)));
         }
 
     }

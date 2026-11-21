@@ -27,7 +27,7 @@ public class TestJvmThreadDump
         FakeJvm jvm = new FakeJvm();
         List<Line> lines = new ArrayList<>();
         JvmSnapshot snapshot = jvm.snapshot();
-        Findings findings = Findings.run(snapshot, Checks.ALL);
+        Findings findings = Findings.run(snapshot, Checks.all(emptyList()));
         lines.addAll(new FindingsSection(findings, snapshot).lines());
         lines.addAll(new JvmInfoSection(jvm, snapshot, findings, emptyList(), emptyMap()).lines());
         lines.addAll(new MemorySection(jvm, snapshot, findings).lines());
@@ -134,6 +134,22 @@ public class TestJvmThreadDump
                 .contains(titled("Main Arguments", "--port 8080"))
                 .contains(titled("App", "cheese"))
                 .isEqualTo(dump.generate());
+    }
+
+    @Test
+    void leavesWaitingThreadsOfAnIdleLibraryOutOfStackPileUp() {
+        FakeJvm jvm = new FakeJvm();
+        for (int i = 0; i < 10; i++) {
+            jvm.addThread("quartz-" + i, 1000 + i, Thread.State.TIMED_WAITING,
+                    FakeThreads.frame("java.lang.Object", "wait"),
+                    FakeThreads.frame("org.quartz.simpl.SimpleThreadPool$WorkerThread", "run"));
+        }
+        JvmThreadDump.Builder builder = JvmThreadDump.builder().jvmSources(jvm).sampleWindow(Duration.ZERO);
+
+        assertThat(builder.build().generate()).contains("Stack Pile-up");
+        JvmThreadDump dump = builder.idleLibraryPrefixes(Collections.singletonList("org.quartz.")).build();
+        assertThat(dump.generate()).doesNotContain("Stack Pile-up");
+        assertThat(dump.toBuilder().build().generate()).doesNotContain("Stack Pile-up");
     }
 
     @Test

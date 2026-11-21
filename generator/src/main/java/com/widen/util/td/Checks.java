@@ -9,17 +9,22 @@ import java.util.List;
  */
 final class Checks
 {
-    static final List<Check> ALL = Collections.unmodifiableList(Arrays.<Check>asList(
-            new DeadlockCheck(),
-            new LockPileUpCheck(),
-            new StackPileUpCheck(),
-            new HeapFullCheck(),
-            new MetadataFullCheck(),
-            new GcOverheadCheck(),
-            new CpuSaturatedCheck(),
-            new FileDescriptorsCheck(),
-            new HotThreadsCheck()));
-
     private Checks() {
+    }
+
+    /**
+     * @param idleLibraryPrefixes the package prefixes {@link StackPileUpCheck} adds to its idle rule
+     */
+    static List<Check> all(List<String> idleLibraryPrefixes) {
+        return Collections.unmodifiableList(Arrays.<Check>asList(
+                new DeadlockCheck(),
+                new LockPileUpCheck(),
+                new StackPileUpCheck(idleLibraryPrefixes),
+                new HeapFullCheck(),
+                new MetadataFullCheck(),
+                new GcOverheadCheck(),
+                new CpuSaturatedCheck(),
+                new FileDescriptorsCheck(),
+                new HotThreadsCheck()));
     }
 }

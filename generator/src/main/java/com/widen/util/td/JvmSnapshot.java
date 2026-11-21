@@ -70,8 +70,8 @@ final class JvmSnapshot
     private JvmSnapshot(List<ThreadSnapshot> threads, long[] jvmDeadlockedIds, List<PoolSnapshot> pools,
             List<GcSnapshot> collectors, double systemCpuLoad, double processCpuLoad, long openFileDescriptors,
             long maxFileDescriptors, CgroupCpu cgroupCpu, boolean cpuThrottlingSampled, long windowCpuPeriods,
-            long windowCpuThrottledPeriods, long uptimeMillis, long windowNanos, boolean cpuTimeAvailable, boolean allocationAvailable,
-            long generatingThreadId) {
+            long windowCpuThrottledPeriods, long uptimeMillis, long windowNanos, boolean cpuTimeAvailable,
+            boolean allocationAvailable, long generatingThreadId) {
         this.threads = threads;
         this.jvmDeadlockedIds = jvmDeadlockedIds;
         this.pools = pools;

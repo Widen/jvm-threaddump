@@ -24,6 +24,7 @@ final class Checks
                 new MetadataFullCheck(),
                 new GcOverheadCheck(),
                 new CpuSaturatedCheck(),
+                new CpuThrottledCheck(),
                 new FileDescriptorsCheck(),
                 new HotThreadsCheck()));
     }

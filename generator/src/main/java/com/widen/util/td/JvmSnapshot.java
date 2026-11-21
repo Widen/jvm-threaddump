@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -90,13 +91,12 @@ final class JvmSnapshot
         boolean allocationAvailable = sunThreadBean != null && sunThreadBean.isThreadAllocatedMemorySupported()
                 && sunThreadBean.isThreadAllocatedMemoryEnabled();
 
-        WindowStart start = null;
+        Reading start = null;
         long windowNanos = 0;
         boolean interruptedInWindow = false;
-        if (!window.isZero() && !window.isNegative() && !Thread.currentThread().isInterrupted()) {
+        if (!window.isZero() && !Thread.currentThread().isInterrupted()) {
             long startNanos = jvm.nanoTime();
-            start = WindowStart.read(jvm, threadBean, cpuTimeAvailable, allocationAvailable ? sunThreadBean : null,
-                    sunOs);
+            start = Reading.read(jvm, threadBean, cpuTimeAvailable, allocationAvailable ? sunThreadBean : null, sunOs);
             try {
                 jvm.pause(window);
                 windowNanos = jvm.nanoTime() - startNanos;
@@ -107,29 +107,28 @@ final class JvmSnapshot
             }
         }
         boolean sampled = windowNanos > 0;
-
-        long[] jvmDeadlockedIds = threadBean.findDeadlockedThreads();
+        // Read before the thread dump, whose safepoints would otherwise add their time to every rate but not to
+        // windowNanos. Allocation only ever prints as a rate, so a dump that is not sampled skips it.
+        Reading end = Reading.read(jvm, threadBean, cpuTimeAvailable,
+                sampled && allocationAvailable ? sunThreadBean : null, sunOs);
 
         Map<Long, ThreadInfo> infos = new HashMap<>();
         for (ThreadInfo info : threadBean.dumpAllThreads(false, false)) {
             infos.put(info.getThreadId(), info);
         }
+        // Asked after the dump, so the JVM reports every permanent cycle that the dump shows.
+        long[] jvmDeadlockedIds = threadBean.findDeadlockedThreads();
+
         List<ThreadSnapshot> threads = new ArrayList<>();
         for (Thread thread : jvm.liveThreads()) {
-            ThreadInfo info = infos.get(thread.getId());
+            long id = thread.getId();
+            ThreadInfo info = infos.get(id);
             if (info != null) {
                 String name = thread.getName();
                 String toString = thread.toString();
-                long cpuNanos = cpuTimeAvailable ? threadBean.getThreadCpuTime(thread.getId()) : -1;
-                long windowCpuNanos = -1;
-                long windowAllocatedBytes = -1;
-                if (sampled) {
-                    windowCpuNanos = cpuTimeAvailable ? windowDelta(cpuNanos, start.cpuNanos, thread.getId()) : -1;
-                    windowAllocatedBytes = allocationAvailable
-                            ? windowDelta(sunThreadBean.getThreadAllocatedBytes(thread.getId()), start.allocatedBytes,
-                                    thread.getId())
-                            : -1;
-                }
+                long cpuNanos = end.cpuNanos.getOrDefault(id, -1L);
+                long windowCpuNanos = sampled ? windowDelta(end.cpuNanos, start.cpuNanos, id) : -1;
+                long windowAllocatedBytes = sampled ? windowDelta(end.allocatedBytes, start.allocatedBytes, id) : -1;
                 threads.add(new ThreadSnapshot(thread, info, name, toString, cpuNanos, windowCpuNanos,
                         windowAllocatedBytes));
             }
@@ -145,10 +144,10 @@ final class JvmSnapshot
         }
 
         List<GcSnapshot> collectors = new ArrayList<>();
-        for (GarbageCollectorMXBean collector : jvm.garbageCollectors()) {
-            String name = collector.getName();
-            long count = collector.getCollectionCount();
-            long timeMillis = collector.getCollectionTime();
+        for (Map.Entry<String, long[]> collector : end.collectors.entrySet()) {
+            String name = collector.getKey();
+            long count = collector.getValue()[0];
+            long timeMillis = collector.getValue()[1];
             long windowCount = 0;
             long windowTimeMillis = 0;
             long[] before = sampled ? start.collectors.get(name) : null;
@@ -159,12 +158,6 @@ final class JvmSnapshot
             collectors.add(new GcSnapshot(name, count, timeMillis, windowCount, windowTimeMillis));
         }
 
-        double systemCpuLoad = -1;
-        double processCpuLoad = -1;
-        if (sunOs != null && !interruptedInWindow) {
-            systemCpuLoad = sunOs.getSystemCpuLoad();
-            processCpuLoad = sunOs.getProcessCpuLoad();
-        }
         long openFileDescriptors = -1;
         long maxFileDescriptors = -1;
         com.sun.management.UnixOperatingSystemMXBean unixOs = SunManagement.unixOperatingSystem(os);
@@ -178,12 +171,12 @@ final class JvmSnapshot
                 jvmDeadlockedIds == null ? new long[0] : jvmDeadlockedIds,
                 Collections.unmodifiableList(pools),
                 Collections.unmodifiableList(collectors),
-                systemCpuLoad,
-                processCpuLoad,
+                interruptedInWindow ? -1 : end.systemCpuLoad,
+                interruptedInWindow ? -1 : end.processCpuLoad,
                 openFileDescriptors,
                 maxFileDescriptors,
                 jvm.runtime().getUptime(),
-                sampled ? windowNanos : 0,
+                windowNanos,
                 cpuTimeAvailable,
                 allocationAvailable,
                 Thread.currentThread().getId());
@@ -215,10 +208,11 @@ final class JvmSnapshot
 
     /**
      * The growth of a counter over the window. A thread missing from the start reading counts its whole total, and a
-     * counter that is unavailable at either end gives -1.
+     * counter that is unavailable at either end, or a thread missing from the end reading, gives -1.
      */
-    private static long windowDelta(long end, Map<Long, Long> startValues, long threadId) {
-        if (end < 0) {
+    private static long windowDelta(Map<Long, Long> endValues, Map<Long, Long> startValues, long threadId) {
+        Long end = endValues.get(threadId);
+        if (end == null || end < 0) {
             return -1;
         }
         Long before = startValues.get(threadId);
@@ -228,38 +222,47 @@ final class JvmSnapshot
         return before < 0 ? -1 : end - before;
     }
 
-    /** What the JVM reported before the pause. */
-    private static final class WindowStart
+    /** The counters the JVM reported at one end of the window. A dump that is not sampled takes one, for totals. */
+    private static final class Reading
     {
+        /** Total CPU time by thread id, empty when not read. */
         final Map<Long, Long> cpuNanos = new HashMap<>();
+        /** Total allocated bytes by thread id, empty when not read. */
         final Map<Long, Long> allocatedBytes = new HashMap<>();
-        final Map<String, long[]> collectors = new HashMap<>();
+        /** The collection count and time in milliseconds by collector name, in JVM order. */
+        final Map<String, long[]> collectors = new LinkedHashMap<>();
+        /** The load since the previous reading, or -1 when unavailable. */
+        double systemCpuLoad = -1;
+        /** The load since the previous reading, or -1 when unavailable. */
+        double processCpuLoad = -1;
 
         /**
          * @param readCpuTime whether to read CPU time from {@code threadBean}
          * @param allocationBean the bean to read allocated bytes from, or null to skip it
-         * @param os the bean whose CPU loads start their measuring span, or null
+         * @param os the bean to read the CPU loads from, or null to skip them
          */
-        static WindowStart read(JvmSources jvm, ThreadMXBean threadBean, boolean readCpuTime,
+        static Reading read(JvmSources jvm, ThreadMXBean threadBean, boolean readCpuTime,
                 com.sun.management.ThreadMXBean allocationBean, com.sun.management.OperatingSystemMXBean os) {
-            WindowStart start = new WindowStart();
-            for (long id : threadBean.getAllThreadIds()) {
-                if (readCpuTime) {
-                    start.cpuNanos.put(id, threadBean.getThreadCpuTime(id));
-                }
-                if (allocationBean != null) {
-                    start.allocatedBytes.put(id, allocationBean.getThreadAllocatedBytes(id));
+            Reading reading = new Reading();
+            if (readCpuTime || allocationBean != null) {
+                for (long id : threadBean.getAllThreadIds()) {
+                    if (readCpuTime) {
+                        reading.cpuNanos.put(id, threadBean.getThreadCpuTime(id));
+                    }
+                    if (allocationBean != null) {
+                        reading.allocatedBytes.put(id, allocationBean.getThreadAllocatedBytes(id));
+                    }
                 }
             }
             for (GarbageCollectorMXBean collector : jvm.garbageCollectors()) {
-                start.collectors.put(collector.getName(),
+                reading.collectors.put(collector.getName(),
                         new long[] {collector.getCollectionCount(), collector.getCollectionTime()});
             }
             if (os != null) {
-                os.getSystemCpuLoad();
-                os.getProcessCpuLoad();
+                reading.systemCpuLoad = os.getSystemCpuLoad();
+                reading.processCpuLoad = os.getProcessCpuLoad();
             }
-            return start;
+            return reading;
         }
     }
 }

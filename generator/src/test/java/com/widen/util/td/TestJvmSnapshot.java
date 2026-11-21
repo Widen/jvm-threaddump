@@ -9,10 +9,12 @@ import java.time.Duration;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 import static com.widen.util.td.FakeJvm.MB;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -130,7 +132,7 @@ public class TestJvmSnapshot
         FakeJvm jvm = jvmWithCpuAndAllocation();
         jvm.addThread("a", 23, Thread.State.RUNNABLE);
         jvm.addThread("c", 25, Thread.State.RUNNABLE);
-        when(jvm.threads.getAllThreadIds()).thenReturn(new long[] {23, 24});
+        when(jvm.threads.getAllThreadIds()).thenReturn(new long[] {23, 24}, new long[] {23, 25});
         when(jvm.threads.getThreadCpuTime(23)).thenReturn(1_000_000_000L, 1_600_000_000L);
         when(jvm.threads.getThreadCpuTime(25)).thenReturn(200_000_000L);
         when(jvm.threads.getThreadAllocatedBytes(23)).thenReturn(10 * MB, 110 * MB);
@@ -165,6 +167,31 @@ public class TestJvmSnapshot
         assertThat(undefinedAtStart.windowTimeMillis).isEqualTo(0);
         assertThat(snapshot.systemCpuLoad).isEqualTo(0.95);
         assertThat(snapshot.processCpuLoad).isEqualTo(0.40);
+    }
+
+    @Test
+    void takesTheEndReadingsBeforeDumpingThreads() {
+        FakeJvm jvm = jvmWithCpuAndAllocation();
+        jvm.addBusyThread("a", 23, 600_000_000L);
+        jvm.addAllocatingThread("b", 24, 100 * MB);
+        GarbageCollectorMXBean collector = jvm.addCollector("G1 Young Generation", 5, 100);
+        com.sun.management.OperatingSystemMXBean os = (com.sun.management.OperatingSystemMXBean) jvm.operatingSystem;
+
+        JvmSnapshot.read(jvm, Duration.ofSeconds(1));
+
+        InOrder cpuTime = inOrder(jvm.threads);
+        cpuTime.verify(jvm.threads, times(2)).getThreadCpuTime(23);
+        cpuTime.verify(jvm.threads).dumpAllThreads(false, false);
+        cpuTime.verify(jvm.threads).findDeadlockedThreads();
+        InOrder allocation = inOrder(jvm.threads);
+        allocation.verify(jvm.threads, times(2)).getThreadAllocatedBytes(24);
+        allocation.verify(jvm.threads).dumpAllThreads(false, false);
+        InOrder collection = inOrder(collector, jvm.threads);
+        collection.verify(collector, times(2)).getCollectionTime();
+        collection.verify(jvm.threads).dumpAllThreads(false, false);
+        InOrder cpuLoad = inOrder(os, jvm.threads);
+        cpuLoad.verify(os, times(2)).getSystemCpuLoad();
+        cpuLoad.verify(jvm.threads).dumpAllThreads(false, false);
     }
 
     @Test

@@ -49,9 +49,14 @@ final class JvmSnapshot
     final long cpuPeriods;
     /** The periods the container was throttled in, or 0 without a limit. */
     final long cpuThrottledPeriods;
-    /** The periods inside the sampling window, or 0 when not sampled. */
+    /**
+     * Whether the window counts are measured: the dump is sampled, both readings have a limit, and neither counter went
+     * down.
+     */
+    final boolean cpuThrottlingSampled;
+    /** The periods inside the sampling window, or 0 unless {@link #cpuThrottlingSampled}. */
     final long windowCpuPeriods;
-    /** The throttled periods inside the sampling window, or 0 when not sampled. */
+    /** The throttled periods inside the sampling window, or 0 unless {@link #cpuThrottlingSampled}. */
     final long windowCpuThrottledPeriods;
     final long uptimeMillis;
     /** The length of the sampling window in nanoseconds, or 0 when not sampled. */
@@ -64,8 +69,8 @@ final class JvmSnapshot
 
     private JvmSnapshot(List<ThreadSnapshot> threads, long[] jvmDeadlockedIds, List<PoolSnapshot> pools,
             List<GcSnapshot> collectors, double systemCpuLoad, double processCpuLoad, long openFileDescriptors,
-            long maxFileDescriptors, CgroupCpu cgroupCpu, long windowCpuPeriods, long windowCpuThrottledPeriods,
-            long uptimeMillis, long windowNanos, boolean cpuTimeAvailable, boolean allocationAvailable,
+            long maxFileDescriptors, CgroupCpu cgroupCpu, boolean cpuThrottlingSampled, long windowCpuPeriods,
+            long windowCpuThrottledPeriods, long uptimeMillis, long windowNanos, boolean cpuTimeAvailable, boolean allocationAvailable,
             long generatingThreadId) {
         this.threads = threads;
         this.jvmDeadlockedIds = jvmDeadlockedIds;
@@ -79,6 +84,7 @@ final class JvmSnapshot
         this.cpuPeriodMicros = cgroupCpu == null ? 0 : cgroupCpu.periodMicros;
         this.cpuPeriods = cgroupCpu == null ? 0 : cgroupCpu.periods;
         this.cpuThrottledPeriods = cgroupCpu == null ? 0 : cgroupCpu.throttledPeriods;
+        this.cpuThrottlingSampled = cpuThrottlingSampled;
         this.windowCpuPeriods = windowCpuPeriods;
         this.windowCpuThrottledPeriods = windowCpuThrottledPeriods;
         this.uptimeMillis = uptimeMillis;
@@ -185,6 +191,7 @@ final class JvmSnapshot
             maxFileDescriptors = unixOs.getMaxFileDescriptorCount();
         }
 
+        boolean cpuThrottlingSampled = false;
         long windowCpuPeriods = 0;
         long windowCpuThrottledPeriods = 0;
         if (sampled && start.cgroupCpu != null && end.cgroupCpu != null) {
@@ -192,6 +199,7 @@ final class JvmSnapshot
             long throttledPeriods = end.cgroupCpu.throttledPeriods - start.cgroupCpu.throttledPeriods;
             // A counter that went down was reset, so the window has no figures to compare.
             if (periods >= 0 && throttledPeriods >= 0) {
+                cpuThrottlingSampled = true;
                 windowCpuPeriods = periods;
                 windowCpuThrottledPeriods = throttledPeriods;
             }
@@ -207,6 +215,7 @@ final class JvmSnapshot
                 openFileDescriptors,
                 maxFileDescriptors,
                 end.cgroupCpu,
+                cpuThrottlingSampled,
                 windowCpuPeriods,
                 windowCpuThrottledPeriods,
                 jvm.runtime().getUptime(),

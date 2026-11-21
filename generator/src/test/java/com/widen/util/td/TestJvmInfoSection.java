@@ -86,7 +86,8 @@ public class TestJvmInfoSection
     @CsvSource(delimiter = '|', value = {
             "sampled|100000|86358|1182|86400|1203|1|1.00 CPUs; throttled in 21 of 42 periods; 1,203 of 86,400 since the container started",
             "not sampled|100000|86400|1203|86400|1203|0|1.00 CPUs; throttled in 1,203 of 86,400 periods since the container started",
-            "half a CPU|50000|86400|1203|86400|1203|0|0.50 CPUs; throttled in 1,203 of 86,400 periods since the container started" })
+            "half a CPU|50000|86400|1203|86400|1203|0|0.50 CPUs; throttled in 1,203 of 86,400 periods since the container started",
+            "counters go down|100000|86500|1300|86400|1203|1|1.00 CPUs; throttled in 1,203 of 86,400 periods since the container started" })
     void printsTheCpuLimitAfterSystemProcessors(String description, long quotaMicros, long startPeriods,
             long startThrottledPeriods, long endPeriods, long endThrottledPeriods, long windowSeconds, String expected) {
         FakeJvm jvm = new FakeJvm();

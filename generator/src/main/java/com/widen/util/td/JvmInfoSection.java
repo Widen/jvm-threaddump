@@ -148,7 +148,7 @@ final class JvmInfoSection
     }
 
     private String cpuLimit() {
-        if (snapshot.sampled()) {
+        if (snapshot.cpuThrottlingSampled) {
             return format(Locale.US, "%.2f CPUs; throttled in %,d of %,d periods; %,d of %,d since the container started",
                     snapshot.cpuLimit, snapshot.windowCpuThrottledPeriods, snapshot.windowCpuPeriods,
                     snapshot.cpuThrottledPeriods, snapshot.cpuPeriods);

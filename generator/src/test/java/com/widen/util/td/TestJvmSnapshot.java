@@ -281,6 +281,7 @@ public class TestJvmSnapshot
         assertThat(snapshot.cpuPeriodMicros).isEqualTo(100_000);
         assertThat(snapshot.cpuPeriods).isEqualTo(142);
         assertThat(snapshot.cpuThrottledPeriods).isEqualTo(31);
+        assertThat(snapshot.cpuThrottlingSampled).isTrue();
         assertThat(snapshot.windowCpuPeriods).isEqualTo(42);
         assertThat(snapshot.windowCpuThrottledPeriods).isEqualTo(21);
     }
@@ -322,6 +323,7 @@ public class TestJvmSnapshot
         assertThat(snapshot.cpuLimit).isEqualTo(limit);
         assertThat(snapshot.cpuPeriods).isEqualTo(periods);
         assertThat(snapshot.cpuThrottledPeriods).isEqualTo(throttledPeriods);
+        assertThat(snapshot.cpuThrottlingSampled).isFalse();
         assertThat(snapshot.windowCpuPeriods).isEqualTo(0);
         assertThat(snapshot.windowCpuThrottledPeriods).isEqualTo(0);
     }

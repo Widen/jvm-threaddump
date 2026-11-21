@@ -43,7 +43,9 @@ final class JvmSnapshot
     final long maxFileDescriptors;
     /** The container's CPU limit in CPUs, or -1 when it has none. */
     final double cpuLimit;
-    /** The periods the kernel has counted for the container, or 0 without a limit. */
+    /** The length of one CPU period in microseconds, or 0 without a limit. */
+    final long cpuPeriodMicros;
+    /** The periods in which the container had work to run, or 0 without a limit. */
     final long cpuPeriods;
     /** The periods the container was throttled in, or 0 without a limit. */
     final long cpuThrottledPeriods;
@@ -74,6 +76,7 @@ final class JvmSnapshot
         this.openFileDescriptors = openFileDescriptors;
         this.maxFileDescriptors = maxFileDescriptors;
         this.cpuLimit = cgroupCpu == null ? -1 : cgroupCpu.limitCpus;
+        this.cpuPeriodMicros = cgroupCpu == null ? 0 : cgroupCpu.periodMicros;
         this.cpuPeriods = cgroupCpu == null ? 0 : cgroupCpu.periods;
         this.cpuThrottledPeriods = cgroupCpu == null ? 0 : cgroupCpu.throttledPeriods;
         this.windowCpuPeriods = windowCpuPeriods;

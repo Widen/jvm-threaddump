@@ -37,6 +37,7 @@ public class TestCgroupCpu
         CgroupCpu cpu = CgroupCpu.read(jvm);
 
         assertThat(cpu.limitCpus).isEqualTo(limitCpus);
+        assertThat(cpu.periodMicros).isEqualTo(100_000);
         assertThat(cpu.periods).isEqualTo(42);
         assertThat(cpu.throttledPeriods).isEqualTo(21);
     }

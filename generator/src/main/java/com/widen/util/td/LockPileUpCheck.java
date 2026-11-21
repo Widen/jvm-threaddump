@@ -22,12 +22,7 @@ final class LockPileUpCheck implements Check
 
     @Override
     public List<Finding> findings(JvmSnapshot snapshot) {
-        List<Map.Entry<Long, List<ThreadSnapshot>>> piles = new ArrayList<>();
-        for (Map.Entry<Long, List<ThreadSnapshot>> pile : snapshot.locks().waitersByHolder().entrySet()) {
-            if (pile.getValue().size() >= MIN_WAITERS) {
-                piles.add(pile);
-            }
-        }
+        List<Map.Entry<Long, List<ThreadSnapshot>>> piles = piles(snapshot);
         piles.sort((one, other) -> {
             int bySize = Integer.compare(other.getValue().size(), one.getValue().size());
             return bySize != 0 ? bySize
@@ -39,6 +34,17 @@ final class LockPileUpCheck implements Check
             findings.add(finding(snapshot.thread(pile.getKey()), pile.getKey(), pile.getValue().size()));
         }
         return findings;
+    }
+
+    /** Each holder the check flags, by id, with the threads that wait behind it. */
+    static List<Map.Entry<Long, List<ThreadSnapshot>>> piles(JvmSnapshot snapshot) {
+        List<Map.Entry<Long, List<ThreadSnapshot>>> piles = new ArrayList<>();
+        for (Map.Entry<Long, List<ThreadSnapshot>> pile : snapshot.locks().waitersByHolder().entrySet()) {
+            if (pile.getValue().size() >= MIN_WAITERS) {
+                piles.add(pile);
+            }
+        }
+        return piles;
     }
 
     private static Finding finding(ThreadSnapshot holder, long holderId, int waiterCount) {

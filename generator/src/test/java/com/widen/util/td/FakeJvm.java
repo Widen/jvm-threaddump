@@ -50,6 +50,8 @@ final class FakeJvm implements JvmSources
     long maxMemory = 512 * MB;
     /** File contents by path, which {@code file} reads. */
     final Map<String, String> files = new HashMap<>();
+    /** Copied into {@link #files} when {@code pause} ends. A null value removes the file. */
+    final Map<String, String> filesAfterPause = new HashMap<>();
     Set<Thread> liveThreads = new HashSet<>();
     long nanoTime;
     int pauses;
@@ -280,6 +282,14 @@ final class FakeJvm implements JvmSources
     @Override
     public void pause(Duration duration) throws InterruptedException {
         pauses++;
+        for (Map.Entry<String, String> file : filesAfterPause.entrySet()) {
+            if (file.getValue() == null) {
+                files.remove(file.getKey());
+            }
+            else {
+                files.put(file.getKey(), file.getValue());
+            }
+        }
         if (interruptPauseAfter != null) {
             nanoTime += interruptPauseAfter.toNanos();
             throw new InterruptedException();

@@ -6,13 +6,20 @@ import java.lang.management.MemoryType;
 import java.lang.management.MemoryUsage;
 import java.lang.management.OperatingSystemMXBean;
 import java.time.Duration;
+import java.util.Map;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 
 import static com.widen.util.td.FakeJvm.MB;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -258,6 +265,71 @@ public class TestJvmSnapshot
         assertThat(snapshot.sampled()).isFalse();
         assertThat(snapshot.threads.get(0).windowCpuNanos).isEqualTo(-1);
         assertThat(stillInterrupted).isTrue();
+    }
+
+    @Test
+    void holdsTheCpuLimitAndTheThrottledPeriodsOfTheWindow() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.cgroupV2(100_000, 100, 10);
+        FakeJvm later = new FakeJvm();
+        later.cgroupV2(100_000, 142, 31);
+        jvm.filesAfterPause.putAll(later.files);
+
+        JvmSnapshot snapshot = JvmSnapshot.read(jvm, Duration.ofSeconds(1));
+
+        assertThat(snapshot.cpuLimit).isEqualTo(1.0);
+        assertThat(snapshot.cpuPeriods).isEqualTo(142);
+        assertThat(snapshot.cpuThrottledPeriods).isEqualTo(31);
+        assertThat(snapshot.windowCpuPeriods).isEqualTo(42);
+        assertThat(snapshot.windowCpuThrottledPeriods).isEqualTo(21);
+    }
+
+    static Stream<Arguments> holdsNoWindowThrottling() {
+        return Stream.of(
+                arguments("not sampled", (Consumer<FakeJvm>) jvm -> jvm.cgroupV2(100_000, 142, 31),
+                        Duration.ZERO, 1.0, 142L, 31L),
+                arguments("no limit", (Consumer<FakeJvm>) jvm -> { },
+                        Duration.ofSeconds(1), -1.0, 0L, 0L),
+                arguments("limit appears", (Consumer<FakeJvm>) jvm -> jvm.filesAfterPause.putAll(cgroupV2(142, 31)),
+                        Duration.ofSeconds(1), 1.0, 142L, 31L),
+                arguments("limit goes away", (Consumer<FakeJvm>) jvm -> {
+                    jvm.cgroupV2(100_000, 100, 10);
+                    jvm.filesAfterPause.put("/sys/fs/cgroup/cpu.max", null);
+                }, Duration.ofSeconds(1), -1.0, 0L, 0L),
+                arguments("counters go down", (Consumer<FakeJvm>) jvm -> {
+                    jvm.cgroupV2(100_000, 100, 10);
+                    jvm.filesAfterPause.putAll(cgroupV2(5, 1));
+                }, Duration.ofSeconds(1), 1.0, 5L, 1L),
+                arguments("interrupted in the window", (Consumer<FakeJvm>) jvm -> {
+                    jvm.cgroupV2(100_000, 100, 10);
+                    jvm.filesAfterPause.putAll(cgroupV2(142, 31));
+                    jvm.interruptPauseAfter = Duration.ofMillis(250);
+                }, Duration.ofSeconds(1), 1.0, 142L, 31L));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource
+    void holdsNoWindowThrottling(String description, Consumer<FakeJvm> setUp, Duration window, double limit,
+            long periods, long throttledPeriods) {
+        FakeJvm jvm = new FakeJvm();
+        setUp.accept(jvm);
+
+        JvmSnapshot snapshot = JvmSnapshot.read(jvm, window);
+
+        // Clears the flag the interrupted row sets, so it does not leak into the next test.
+        Thread.interrupted();
+        assertThat(snapshot.cpuLimit).isEqualTo(limit);
+        assertThat(snapshot.cpuPeriods).isEqualTo(periods);
+        assertThat(snapshot.cpuThrottledPeriods).isEqualTo(throttledPeriods);
+        assertThat(snapshot.windowCpuPeriods).isEqualTo(0);
+        assertThat(snapshot.windowCpuThrottledPeriods).isEqualTo(0);
+    }
+
+    /** The files of a one-CPU cgroup v2 limit with the counters. */
+    private static Map<String, String> cgroupV2(long periods, long throttledPeriods) {
+        FakeJvm jvm = new FakeJvm();
+        jvm.cgroupV2(100_000, periods, throttledPeriods);
+        return jvm.files;
     }
 
     @Test

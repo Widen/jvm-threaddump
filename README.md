@@ -262,13 +262,16 @@ something on every dump teaches people to skip it:
   Throttling shows as latency, not as load, so a container can be throttled in
   half its periods while `CPU Load` stays under 0.90 and `CPU Saturated` stays
   silent. The kernel counts only the periods in which the container had work to
-  run, so both measures count each throttled period as a whole period of
-  elapsed time and compare the total with the window or with JVM uptime. One
-  short burst in an idle window, throttled in both of the two periods it spans,
-  therefore does not flag. The counts come from the
-  container's cgroup v1 or v2 files at `/sys/fs/cgroup`. A JVM in a nested
-  cgroup on a plain host, such as a systemd service with `CPUQuota`, gets no
-  `CPU Limit` line and no check.
+  run, so both measures count each throttled period as a whole period of elapsed
+  time and compare the total with the window or with JVM uptime. In the default
+  one-second window, one short burst that is throttled in both of the two
+  periods it spans gives 20% and does not flag; a window of 0.8 seconds or less
+  lets it flag. The counters cover the container's whole life, so a JVM that
+  started after other work in the same container, such as a migration step or a
+  restarted JVM, counts that work's throttling against its own uptime. The
+  counts come from the container's cgroup v1 or v2 files at `/sys/fs/cgroup`. A
+  JVM in a nested cgroup on a plain host, such as a systemd service with
+  `CPUQuota`, gets no `CPU Limit` line and no check.
 - **Hot Threads** lists up to five threads, highest first, with the top three
   frames of each stack. A thread that started during the window counts its
   whole CPU time as the window's.

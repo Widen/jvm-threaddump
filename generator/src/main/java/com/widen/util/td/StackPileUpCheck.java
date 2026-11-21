@@ -46,11 +46,9 @@ final class StackPileUpCheck implements Check
     @Override
     public List<Finding> findings(JvmSnapshot snapshot) {
         Set<Long> countedElsewhere = new HashSet<>(snapshot.locks().inOrBehindCycles());
-        for (List<ThreadSnapshot> waiters : snapshot.locks().waitersByHolder().values()) {
-            if (waiters.size() >= LockPileUpCheck.MIN_WAITERS) {
-                for (ThreadSnapshot waiter : waiters) {
-                    countedElsewhere.add(waiter.id());
-                }
+        for (Map.Entry<Long, List<ThreadSnapshot>> pile : LockPileUpCheck.piles(snapshot)) {
+            for (ThreadSnapshot waiter : pile.getValue()) {
+                countedElsewhere.add(waiter.id());
             }
         }
 

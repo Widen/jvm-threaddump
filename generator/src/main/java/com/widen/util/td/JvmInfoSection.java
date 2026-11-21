@@ -154,7 +154,7 @@ final class JvmInfoSection
      *         two numbers
      */
     private long[] systemUptimeSeconds() {
-        String[] fields = jvm.procUptime().map(text -> text.trim().split("\\s+")).orElse(new String[0]);
+        String[] fields = jvm.file("/proc/uptime").map(text -> text.trim().split("\\s+")).orElse(new String[0]);
         try {
             if (fields.length == 2) {
                 return new long[] { Double.valueOf(fields[0]).longValue(), Double.valueOf(fields[1]).longValue() };

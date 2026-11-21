@@ -109,21 +109,26 @@ A dump that is not sampled prints only the totals:
 It runs after `CPU Saturated` and applies when the container has a limit. Either
 measure flags, and the finding prints each one that did, as `GC Overhead` does:
 
-- **Window:** the container was throttled in 25% or more of the window's
-  periods, and in at least 2 of them. The floor keeps one burst in a nearly idle
-  container from flagging.
-- **Lifetime:** the container was throttled in 10% or more of all its periods,
-  once the JVM has run for 5 minutes, because startup work throttles a young
-  JVM. It runs with or without a window.
+The kernel counts a period only when the container had work to run in it, so a
+ratio of the two counters would flag a mostly idle container that was throttled
+in its few busy periods. Both measures count each throttled period as a whole
+period of elapsed time instead:
+
+- **Window:** the throttled periods add up to 25% or more of the window, and
+  number at least 2. The percentage stops at 100%, because a period that
+  straddles an edge of the window counts whole.
+- **Lifetime:** the throttled periods add up to 10% or more of JVM uptime, once
+  the JVM has run for 5 minutes, because startup work throttles a young JVM. It
+  runs with or without a window.
 
 ```text
-         CPU Throttled: the kernel throttled this container in 21 of 42 periods (50%) of the last 4.1s
+         CPU Throttled: the kernel throttled this container in 21 periods (51%) of the last 4.1s
                         the limit is 1.00 CPUs
 ```
 
 The lifetime line reads
-`the kernel has throttled this container in 12% of its periods, an average since it started`.
-The finding marks the `CPU Limit` line.
+`the kernel has throttled this container for 12% of its uptime`. The finding
+marks the `CPU Limit` line.
 
 The thresholds are my calls. They follow `GC Overhead`: 25% of a window, 10% of
 a lifetime, and a 5-minute wait.

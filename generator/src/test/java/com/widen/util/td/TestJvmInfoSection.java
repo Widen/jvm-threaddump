@@ -3,6 +3,7 @@ package com.widen.util.td;
 import java.lang.management.OperatingSystemMXBean;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -28,7 +29,7 @@ public class TestJvmInfoSection
 {
     @Test
     void printsJvmAndHostInfo() {
-        assertThat(TestText.render(new JvmInfoSection(new FakeJvm(), emptyList(), emptyMap()).lines()))
+        assertThat(TestText.render(lines(new FakeJvm())))
                 .containsExactly(
                         titled("Current Time", "11/20/2026 15:30:00 UTC"),
                         titled("Default Time Zone", "Coordinated Universal Time (UTC)"),
@@ -46,6 +47,7 @@ public class TestJvmInfoSection
                         titled("Operating System", "Linux (5.10)"),
                         titled("System Processors", "4 amd64"),
                         titled("System Memory", "1,024 MB available; 4,096 MB total"),
+                        titled("File Descriptors", "Not Available"),
                         titled("CPU Load", "0.2500 system; 0.1250 jvm (0.0 to 1.0)"),
                         titled("System Uptime", "1 days, 2:03:04"),
                         titled("System Idle Time", "0 days, 3:25:45"),
@@ -55,12 +57,39 @@ public class TestJvmInfoSection
     }
 
     @Test
+    void marksTheCpuLoadLine() {
+        FakeJvm jvm = new FakeJvm();
+        JvmSnapshot snapshot = jvm.snapshot();
+        Findings findings = StubCheck.findingsOf(snapshot, StubCheck.finding("Alpha", Finding.lineMark("CPU Load")));
+
+        assertThat(TestText.render(new JvmInfoSection(jvm, snapshot, findings, emptyList(), emptyMap()).lines()))
+                .contains(titled("CPU Load", "0.2500 system; 0.1250 jvm (0.0 to 1.0) <<< Alpha"));
+    }
+
+    @Test
+    void printsFileDescriptorsAfterSystemMemory() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.unixOperatingSystem(412, 65_536);
+        JvmSnapshot snapshot = jvm.snapshot();
+        Findings findings = StubCheck.findingsOf(snapshot, StubCheck.finding("Alpha", Finding.lineMark("File Descriptors")));
+
+        assertThat(TestText.render(lines(jvm)))
+                .containsSubsequence(
+                        titled("System Memory", "1,024 MB available; 4,096 MB total"),
+                        titled("File Descriptors", "412 open; 65,536 limit"),
+                        titled("CPU Load", "0.2500 system; 0.1250 jvm (0.0 to 1.0)"));
+        assertThat(TestText.render(new JvmInfoSection(jvm, snapshot, findings, emptyList(), emptyMap()).lines()))
+                .contains(titled("File Descriptors", "412 open; 65,536 limit <<< Alpha"));
+    }
+
+    @Test
     void printsCustomValuesAndMainArgumentsInOrder() {
         Map<String, Object> custom = new LinkedHashMap<>();
         custom.put("App", "cheese");
         custom.put("Build", 42);
 
-        assertThat(TestText.render(new JvmInfoSection(new FakeJvm(), Arrays.asList("--port", "8080"), custom).lines()))
+        FakeJvm jvm = new FakeJvm();
+        assertThat(TestText.render(new JvmInfoSection(jvm, jvm.snapshot(), Findings.NONE, Arrays.asList("--port", "8080"), custom).lines()))
                 .containsSubsequence(
                         titled("Temp Directory", "/tmp"),
                         "",
@@ -83,10 +112,11 @@ public class TestJvmInfoSection
         jvm.environment.clear();
         jvm.procUptime = uptime.isEmpty() ? Optional.empty() : Optional.of(uptime);
 
-        assertThat(TestText.render(new JvmInfoSection(jvm, emptyList(), emptyMap()).lines()))
+        assertThat(TestText.render(lines(jvm)))
                 .contains(
                         titled("Hostname", "Not Available"),
                         titled("System Memory", "Not Available"),
+                        titled("File Descriptors", "Not Available"),
                         titled("CPU Load", "Not Available"),
                         titled("System Uptime", "Not Available"),
                         titled("System Idle Time", "Not Available"),
@@ -99,7 +129,7 @@ public class TestJvmInfoSection
         when(jvm.runtime.getUptime()).thenReturn(-1L);
         when(((com.sun.management.OperatingSystemMXBean) jvm.operatingSystem).getProcessCpuTime()).thenReturn(-1L);
 
-        assertThat(TestText.render(new JvmInfoSection(jvm, emptyList(), emptyMap()).lines()))
+        assertThat(TestText.render(lines(jvm)))
                 .contains(
                         titled("JVM Uptime", "Not Available"),
                         titled("JVM CPU Time", "Not Available"));
@@ -123,8 +153,7 @@ public class TestJvmInfoSection
         FakeJvm jvm = new FakeJvm();
         sample.accept((com.sun.management.OperatingSystemMXBean) jvm.operatingSystem);
 
-        assertThat(TestText.render(new JvmInfoSection(jvm, emptyList(), emptyMap()).lines()))
-                .contains(titled(title, "Not Available"));
+        assertThat(TestText.render(lines(jvm))).contains(titled(title, "Not Available"));
     }
 
     @ParameterizedTest
@@ -157,7 +186,21 @@ public class TestJvmInfoSection
         when(jvm.runtime.getInputArguments())
                 .thenReturn(Arrays.asList("-Dz.token=abc", "-Da=1", "-Xmx1g", "-javaagent:x.jar"));
 
-        assertThat(TestText.render(new JvmInfoSection(jvm, emptyList(), emptyMap()).lines()))
+        assertThat(TestText.render(lines(jvm)))
                 .containsSubsequence(titled("JVM System Props", "a=1"), continued("z.token=****"));
+    }
+
+    @Test
+    void masksMainArgumentsThatLookLikeSecrets() {
+        FakeJvm jvm = new FakeJvm();
+        List<String> arguments = Arrays.asList("--port=8080", "--db.password=hunter2", "--token", "abc");
+
+        assertThat(TestText.render(
+                new JvmInfoSection(jvm, jvm.snapshot(), Findings.NONE, arguments, emptyMap()).lines()))
+                .contains(titled("Main Arguments", "--port=8080 --db.password=**** --token abc"));
+    }
+
+    private static List<Line> lines(FakeJvm jvm) {
+        return new JvmInfoSection(jvm, jvm.snapshot(), Findings.NONE, emptyList(), emptyMap()).lines();
     }
 }

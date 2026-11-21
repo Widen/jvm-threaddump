@@ -1,6 +1,5 @@
 package com.widen.util.td;
 
-import java.lang.management.GarbageCollectorMXBean;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -14,17 +13,20 @@ import static java.lang.String.format;
  */
 final class GcSection
 {
-    private final JvmSources jvm;
+    private final JvmSnapshot snapshot;
+    private final Findings findings;
 
-    GcSection(JvmSources jvm) {
-        this.jvm = jvm;
+    GcSection(JvmSnapshot snapshot, Findings findings) {
+        this.snapshot = snapshot;
+        this.findings = findings;
     }
 
     List<Line> lines() {
         List<Line> lines = new ArrayList<>();
-        for (GarbageCollectorMXBean gc : jvm.garbageCollectors()) {
-            lines.add(new TitledLine("GC " + gc.getName(), format(Locale.US, "spent %s doing %d collections",
-                    Durations.hoursMinutesSecondsMillis(gc.getCollectionTime()), gc.getCollectionCount())));
+        for (GcSnapshot gc : snapshot.collectors) {
+            lines.add(new TitledLine("GC " + gc.name, format(Locale.US, "spent %s doing %d collections",
+                    Durations.hoursMinutesSecondsMillis(gc.timeMillis), gc.count)
+                    + findings.marker(Finding.gcMark(gc.name))));
         }
         lines.add(new BlankLine());
         return lines;

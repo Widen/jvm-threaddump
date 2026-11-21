@@ -10,16 +10,23 @@ public class TestDeadlockSection
 {
     @Test
     void printsNoneWithoutDeadlocks() {
-        assertThat(TestText.render(new DeadlockSection(new FakeJvm()).lines()))
+        assertThat(TestText.render(new DeadlockSection(new FakeJvm().snapshot()).lines()))
                 .containsExactly(titled("Deadlocked Threads", "None"));
     }
 
     @Test
-    void printsDeadlockedIdsInHex() {
-        FakeJvm jvm = new FakeJvm();
-        when(jvm.threads.findDeadlockedThreads()).thenReturn(new long[] { 3, 26 });
+    void printsTheCycleThreadsByName() {
+        assertThat(TestText.render(new DeadlockSection(TestDeadlockCheck.deadlockOfAAndB().snapshot()).lines()))
+                .containsExactly(titled("Deadlocked Threads", "\"a\" (0x1), \"b\" (0x2)"));
+    }
 
-        assertThat(TestText.render(new DeadlockSection(jvm).lines()))
-                .containsExactly(titled("Deadlocked Threads", "0x3, 0x1a"));
+    @Test
+    void printsTheJvmsThreadsWhenItFindsNoCycle() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("a", 1, Thread.State.RUNNABLE);
+        when(jvm.threads.findDeadlockedThreads()).thenReturn(new long[] { 1, 99 });
+
+        assertThat(TestText.render(new DeadlockSection(jvm.snapshot()).lines()))
+                .containsExactly(titled("Deadlocked Threads", "\"a\" (0x1), 0x63"));
     }
 }

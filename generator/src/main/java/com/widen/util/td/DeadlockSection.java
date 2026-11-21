@@ -1,28 +1,32 @@
 package com.widen.util.td;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static com.widen.util.td.Line.TitledLine;
 
 /**
- * The ids of the threads the JVM reports as deadlocked.
+ * The threads in a lock cycle, or the threads the JVM reports as deadlocked when the owner graph holds no cycle.
  */
 final class DeadlockSection
 {
-    private final JvmSources jvm;
+    private final JvmSnapshot snapshot;
 
-    DeadlockSection(JvmSources jvm) {
-        this.jvm = jvm;
+    DeadlockSection(JvmSnapshot snapshot) {
+        this.snapshot = snapshot;
     }
 
     List<Line> lines() {
-        long[] deadlockedThreads = jvm.threads().findDeadlockedThreads();
-        String value = deadlockedThreads == null
-                ? "None"
-                : Arrays.stream(deadlockedThreads).mapToObj(id -> "0x" + Long.toHexString(id)).collect(Collectors.joining(", "));
-        return Collections.singletonList(new TitledLine("Deadlocked Threads", value));
+        List<Long> ids = snapshot.locks().deadlockedIds();
+        List<String> labels = new ArrayList<>();
+        if (ids.isEmpty()) {
+            labels.add("None");
+        }
+        for (long id : ids) {
+            ThreadSnapshot thread = snapshot.thread(id);
+            labels.add(thread == null ? "0x" + Long.toHexString(id) : thread.label());
+        }
+        return Collections.singletonList(new TitledLine("Deadlocked Threads", String.join(", ", labels)));
     }
 }

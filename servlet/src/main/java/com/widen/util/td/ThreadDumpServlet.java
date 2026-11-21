@@ -2,7 +2,9 @@ package com.widen.util.td;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -12,9 +14,14 @@ import javax.servlet.http.HttpServletResponse;
 /**
  * Serves a {@link JvmThreadDump} on GET as UTF-8 {@code text/plain} with headers that prevent caching.
  * A subclass customizes the dump by passing a configured {@link JvmThreadDump} to the constructor.
+ * The optional request parameter {@code window} (whole seconds from 0 to 30) sets the sampling window, and
+ * {@code frames=all} prints every frame. A bad value gets status 400 and a plain-text explanation.
  */
 public class ThreadDumpServlet extends HttpServlet
 {
+    private static final int MAX_WINDOW_SECONDS = 30;
+    private static final Pattern WINDOW_SECONDS = Pattern.compile("\\d{1,2}");
+
     private final JvmThreadDump dump;
 
     /**
@@ -33,7 +40,19 @@ public class ThreadDumpServlet extends HttpServlet
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        byte[] body = dump.generate().getBytes(StandardCharsets.UTF_8);
+        JvmThreadDump requested;
+        try {
+            requested = forRequest(dump, req.getParameter("window"), req.getParameter("frames"));
+        } catch (IllegalArgumentException e) {
+            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            respond(resp, e.getMessage());
+            return;
+        }
+        respond(resp, requested.generate());
+    }
+
+    private static void respond(HttpServletResponse resp, String text) throws IOException {
+        byte[] body = text.getBytes(StandardCharsets.UTF_8);
 
         resp.setContentType("text/plain; charset=UTF-8");
         resp.setContentLength(body.length);
@@ -43,6 +62,40 @@ public class ThreadDumpServlet extends HttpServlet
         resp.setHeader("X-Robots-Tag", "noindex, nofollow");
 
         resp.getOutputStream().write(body);
+    }
+
+    /**
+     * Returns {@code dump} itself when both parameters are null, else a copy with the requested settings.
+     *
+     * @param window the sampling window as whole seconds from 0 to 30, or null to keep the dump's own
+     * @param frames {@code all} to print every frame, or null to keep the dump's own
+     * @throws IllegalArgumentException with the response text when a value is not allowed
+     */
+    static JvmThreadDump forRequest(JvmThreadDump dump, String window, String frames) {
+        if (window == null && frames == null) {
+            return dump;
+        }
+        JvmThreadDump.Builder builder = dump.toBuilder();
+        if (window != null) {
+            builder.sampleWindow(Duration.ofSeconds(parseWindowSeconds(window)));
+        }
+        if (frames != null) {
+            if (!frames.equals("all")) {
+                throw new IllegalArgumentException("frames must be all");
+            }
+            builder.allFrames(true);
+        }
+        return builder.build();
+    }
+
+    private static int parseWindowSeconds(String window) {
+        if (WINDOW_SECONDS.matcher(window).matches()) {
+            int seconds = Integer.parseInt(window);
+            if (seconds <= MAX_WINDOW_SECONDS) {
+                return seconds;
+            }
+        }
+        throw new IllegalArgumentException("window must be a whole number of seconds from 0 to " + MAX_WINDOW_SECONDS);
     }
 
 }

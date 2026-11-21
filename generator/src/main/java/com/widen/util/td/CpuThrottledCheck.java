@@ -11,8 +11,8 @@ import java.util.Locale;
  * work throttles a younger JVM. The window measure needs at least two throttled periods.
  * <p>
  * The kernel counts a period only when the container had work to run in it, so a ratio of its counters would flag a
- * mostly idle container that was throttled in its few busy periods. The lifetime measure therefore counts each
- * throttled period as a whole period of elapsed time and compares that with uptime. The counters cover the
+ * mostly idle container that was throttled in its few busy periods. Both measures therefore count each throttled
+ * period as a whole period of elapsed time and compare that with the window or the uptime. The counters cover the
  * container's life, so a JVM that started in an older container also counts the throttling before it.
  */
 final class CpuThrottledCheck implements Check
@@ -32,13 +32,12 @@ final class CpuThrottledCheck implements Check
     public List<Finding> findings(JvmSnapshot snapshot) {
         List<String> lines = new ArrayList<>();
         long windowThrottled = snapshot.windowCpuThrottledPeriods;
-        long windowPeriods = snapshot.windowCpuPeriods;
-        if (snapshot.sampled() && windowPeriods > 0 && windowThrottled >= MIN_WINDOW_THROTTLED_PERIODS
-                && windowThrottled * 100 >= MIN_WINDOW_PERCENT * windowPeriods) {
-            lines.add(String.format(Locale.US,
-                    "the kernel throttled this container in %d of %d periods (%d%%) of the last %.1fs",
-                    windowThrottled, windowPeriods, windowThrottled * 100 / windowPeriods,
-                    snapshot.windowNanos / 1_000_000_000d));
+        long windowThrottledNanos = windowThrottled * snapshot.cpuPeriodMicros * 1000;
+        long windowNanos = snapshot.windowNanos;
+        if (snapshot.sampled() && windowThrottled >= MIN_WINDOW_THROTTLED_PERIODS
+                && windowThrottledNanos * 100 >= MIN_WINDOW_PERCENT * windowNanos) {
+            lines.add(String.format(Locale.US, "the kernel throttled this container in %d periods (%d%%) of the last %.1fs",
+                    windowThrottled, windowThrottledNanos * 100 / windowNanos, windowNanos / 1_000_000_000d));
         }
 
         long throttledMicros = snapshot.cpuThrottledPeriods * snapshot.cpuPeriodMicros;

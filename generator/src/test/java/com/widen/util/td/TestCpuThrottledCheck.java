@@ -2,7 +2,6 @@ package com.widen.util.td;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,28 +16,25 @@ public class TestCpuThrottledCheck
 
     @ParameterizedTest
     @CsvSource({
-            "3, 10, true",
-            "2, 10, false",
-            "2, 8,  true",
-            "2, 2,  true",
-            "1, 1,  false",
-            "0, 10, false",
-            "2, 0,  false" })
-    void flagsAThrottledWindow(long throttled, long periods, boolean flagged) {
+            "1000, 3, 10, true,  'the kernel throttled this container in 3 periods (30%) of the last 1.0s'",
+            "1000, 2, 10, false,",
+            "1000, 3, 3,  true,  'the kernel throttled this container in 3 periods (30%) of the last 1.0s'",
+            "1000, 2, 2,  false,",
+            "1000, 0, 10, false,",
+            "200,  1, 1,  false,",
+            "200,  2, 2,  true,  'the kernel throttled this container in 2 periods (100%) of the last 0.2s'" })
+    void flagsAThrottledWindow(long windowMillis, long throttled, long periods, boolean flagged, String expectedLine) {
         FakeJvm jvm = new FakeJvm();
         jvm.cgroupV2(100_000, 1_000, 0);
         FakeJvm later = new FakeJvm();
         later.cgroupV2(100_000, 1_000 + periods, throttled);
         jvm.filesAfterPause.putAll(later.files);
 
-        List<Finding> findings = new CpuThrottledCheck().findings(jvm.snapshot(Duration.ofSeconds(1)));
+        List<Finding> findings = new CpuThrottledCheck().findings(jvm.snapshot(Duration.ofMillis(windowMillis)));
 
         if (flagged) {
             assertThat(findings).hasSize(1);
-            assertThat(findings.get(0).lines).containsExactly(
-                    String.format(Locale.US, "the kernel throttled this container in %d of %d periods (%d%%) of the last 1.0s",
-                            throttled, periods, throttled * 100 / periods),
-                    LIMIT_LINE);
+            assertThat(findings.get(0).lines).containsExactly(expectedLine, LIMIT_LINE);
         }
         else {
             assertThat(findings).isEmpty();
@@ -83,7 +79,7 @@ public class TestCpuThrottledCheck
         assertThat(findings).hasSize(1);
         assertThat(findings.get(0).title).isEqualTo("CPU Throttled");
         assertThat(findings.get(0).lines).containsExactly(
-                "the kernel throttled this container in 21 of 42 periods (50%) of the last 4.1s",
+                "the kernel throttled this container in 21 periods (51%) of the last 4.1s",
                 "the kernel has throttled this container for 17% of its uptime",
                 "the limit is 1.00 CPUs");
         assertThat(findings.get(0).marks).containsExactly("line:CPU Limit");

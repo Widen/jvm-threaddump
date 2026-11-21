@@ -66,7 +66,7 @@ public class TestJvmThreadDump
 
         assertThat(dump)
                 .contains(titled("Findings", "1 of 10 checks flagged something (sampled over 1.0s)"))
-                .contains(titled("CPU Throttled", "the kernel throttled this container in 5 of 10 periods (50%) of the last 1.0s"))
+                .contains(titled("CPU Throttled", "the kernel throttled this container in 5 periods (50%) of the last 1.0s"))
                 .contains(titled("CPU Limit", "1.00 CPUs; throttled in 5 of 10 periods; 5 of 110 since the container started <<< CPU Throttled"));
         assertThat(dump.indexOf("CPU Saturated")).isLessThan(0);
     }

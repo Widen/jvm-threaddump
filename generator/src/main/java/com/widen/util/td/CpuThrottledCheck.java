@@ -32,20 +32,23 @@ final class CpuThrottledCheck implements Check
     public List<Finding> findings(JvmSnapshot snapshot) {
         List<String> lines = new ArrayList<>();
         long windowThrottled = snapshot.windowCpuThrottledPeriods;
-        long windowThrottledNanos = windowThrottled * snapshot.cpuPeriodMicros * 1000;
+        long windowThrottledMillis = windowThrottled * snapshot.cpuPeriodMicros / 1000;
         long windowNanos = snapshot.windowNanos;
-        if (snapshot.sampled() && windowThrottled >= MIN_WINDOW_THROTTLED_PERIODS
-                && windowThrottledNanos * 100 >= MIN_WINDOW_PERCENT * windowNanos) {
-            lines.add(String.format(Locale.US, "the kernel throttled this container in %d periods (%d%%) of the last %.1fs",
-                    windowThrottled, windowThrottledNanos * 100 / windowNanos, windowNanos / 1_000_000_000d));
+        if (snapshot.cpuThrottlingSampled && windowThrottled >= MIN_WINDOW_THROTTLED_PERIODS
+                && windowThrottledMillis * 100_000_000L >= MIN_WINDOW_PERCENT * windowNanos) {
+            // A throttled period that straddles an edge of the window counts whole, so a short window can pass 100%.
+            long percent = Math.min(100, windowThrottledMillis * 100_000_000L / windowNanos);
+            lines.add(String.format(Locale.US,
+                    "the kernel throttled this container in %d periods (%d%%) of the last %.1fs",
+                    windowThrottled, percent, windowNanos / 1_000_000_000d));
         }
 
-        long throttledMicros = snapshot.cpuThrottledPeriods * snapshot.cpuPeriodMicros;
+        long throttledMillis = snapshot.cpuThrottledPeriods * snapshot.cpuPeriodMicros / 1000;
         long uptimeMillis = snapshot.uptimeMillis;
         if (uptimeMillis >= MIN_LIFETIME_UPTIME_MILLIS
-                && throttledMicros * 100 >= MIN_LIFETIME_PERCENT * uptimeMillis * 1000) {
+                && throttledMillis * 100 >= MIN_LIFETIME_PERCENT * uptimeMillis) {
             lines.add(String.format(Locale.US, "the kernel has throttled this container for %d%% of its uptime",
-                    throttledMicros / 10 / uptimeMillis));
+                    throttledMillis * 100 / uptimeMillis));
         }
 
         if (lines.isEmpty()) {

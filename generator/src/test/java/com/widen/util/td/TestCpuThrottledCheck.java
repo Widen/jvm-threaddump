@@ -22,7 +22,8 @@ public class TestCpuThrottledCheck
             "1000, 2, 2,  false,",
             "1000, 0, 10, false,",
             "200,  1, 1,  false,",
-            "200,  2, 2,  true,  'the kernel throttled this container in 2 periods (100%) of the last 0.2s'" })
+            "200,  2, 2,  true,  'the kernel throttled this container in 2 periods (100%) of the last 0.2s'",
+            "100,  2, 2,  true,  'the kernel throttled this container in 2 periods (100%) of the last 0.1s'" })
     void flagsAThrottledWindow(long windowMillis, long throttled, long periods, boolean flagged, String expectedLine) {
         FakeJvm jvm = new FakeJvm();
         jvm.cgroupV2(100_000, 1_000, 0);
@@ -83,6 +84,23 @@ public class TestCpuThrottledCheck
                 "the kernel has throttled this container for 17% of its uptime",
                 "the limit is 1.00 CPUs");
         assertThat(findings.get(0).marks).containsExactly("line:CPU Limit");
+    }
+
+    @Test
+    void countsEachThrottledPeriodAtTheContainersPeriodLength() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.files.put("/sys/fs/cgroup/cpu.max", "25000 50000\n");
+        jvm.files.put("/sys/fs/cgroup/cpu.stat", "nr_periods 5000\nnr_throttled 595\n");
+        jvm.filesAfterPause.put("/sys/fs/cgroup/cpu.stat", "nr_periods 5020\nnr_throttled 600\n");
+        when(jvm.runtime.getUptime()).thenReturn(300_000L);
+
+        List<Finding> findings = new CpuThrottledCheck().findings(jvm.snapshot(Duration.ofSeconds(1)));
+
+        assertThat(findings).hasSize(1);
+        assertThat(findings.get(0).lines).containsExactly(
+                "the kernel throttled this container in 5 periods (25%) of the last 1.0s",
+                "the kernel has throttled this container for 10% of its uptime",
+                "the limit is 0.50 CPUs");
     }
 
     @Test

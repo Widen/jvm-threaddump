@@ -29,7 +29,7 @@ final class GcOverheadCheck implements Check
     public List<Finding> findings(JvmSnapshot snapshot) {
         List<GcSnapshot> counted = new ArrayList<>();
         for (GcSnapshot gc : snapshot.collectors) {
-            if (!gc.name.contains("Cycles") && !gc.name.contains("Concurrent")) {
+            if (!gc.name.contains("Cycles")) {
                 counted.add(gc);
             }
         }

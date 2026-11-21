@@ -136,18 +136,20 @@ public class TestGcOverheadCheck
     }
 
     @Test
-    void leavesOutConcurrentCollectorsAndUnknownTimes() {
+    void leavesOutCycleCollectorsAndUnknownTimes() {
         FakeJvm jvm = new FakeJvm();
         addCollector(jvm, "G1 Young Generation", 10, 1000, 12, 1500);
-        addCollector(jvm, "G1 Concurrent GC", 0, 0, 5, 900);
+        addCollector(jvm, "G1 Concurrent GC", 0, 0, 1, 100);
+        addCollector(jvm, "ConcurrentMarkSweep", 0, 0, 1, 100);
         addCollector(jvm, "ZGC Cycles", 0, 0, 3, 900);
         addCollector(jvm, "Undefined", -1, -1, -1, -1);
-        jvm.addCollector("Huge Concurrent Cycles", 1, 100_000_000);
+        jvm.addCollector("Huge Cycles", 1, 100_000_000);
 
         List<Finding> findings = new GcOverheadCheck().findings(jvm.snapshot(Duration.ofSeconds(1)));
 
         assertThat(findings).hasSize(1);
-        assertThat(findings.get(0).lines).containsExactly("GC took 50% of the last 1.0s in 2 collections");
-        assertThat(findings.get(0).marks).containsExactly("gc:G1 Young Generation");
+        assertThat(findings.get(0).lines).containsExactly("GC took 70% of the last 1.0s in 4 collections");
+        assertThat(findings.get(0).marks)
+                .containsExactly("gc:G1 Young Generation", "gc:G1 Concurrent GC", "gc:ConcurrentMarkSweep");
     }
 }

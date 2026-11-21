@@ -245,10 +245,10 @@ something on every dump teaches people to skip it:
   hours old. The check skips a pool with no after-collection reading or no
   defined max.
 - **GC Overhead** leaves out collectors that report concurrent work instead of
-  pauses (names that contain `Cycles` or `Concurrent`). The lifetime measure is
-  an average since the JVM started. It runs with or without a window, but only
-  once the JVM has run for 5 minutes, because collections at startup inflate the
-  average of a younger JVM.
+  pauses (names that contain `Cycles`, such as `ZGC Cycles`). The lifetime
+  measure is an average since the JVM started. It runs with or without a window,
+  but only once the JVM has run for 5 minutes, because collections at startup
+  inflate the average of a younger JVM.
 - **Hot Threads** lists up to five threads, highest first, with the top three
   frames of each stack. A thread that started during the window counts its
   whole CPU time as the window's.

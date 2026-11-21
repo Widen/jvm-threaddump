@@ -5,7 +5,6 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -110,7 +109,12 @@ public class TestJvmInfoSection
         when(plainOs.getArch()).thenReturn("amd64");
         jvm.operatingSystem = plainOs;
         jvm.environment.clear();
-        jvm.procUptime = uptime.isEmpty() ? Optional.empty() : Optional.of(uptime);
+        if (uptime.isEmpty()) {
+            jvm.files.remove("/proc/uptime");
+        }
+        else {
+            jvm.files.put("/proc/uptime", uptime);
+        }
 
         assertThat(TestText.render(lines(jvm)))
                 .contains(

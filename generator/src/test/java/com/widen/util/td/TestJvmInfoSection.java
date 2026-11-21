@@ -1,6 +1,7 @@
 package com.widen.util.td;
 
 import java.lang.management.OperatingSystemMXBean;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -79,6 +80,27 @@ public class TestJvmInfoSection
                         titled("CPU Load", "0.2500 system; 0.1250 jvm (0.0 to 1.0)"));
         assertThat(TestText.render(new JvmInfoSection(jvm, snapshot, findings, emptyList(), emptyMap()).lines()))
                 .contains(titled("File Descriptors", "412 open; 65,536 limit <<< Alpha"));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', value = {
+            "sampled|100000|86358|1182|86400|1203|1|1.00 CPUs; throttled in 21 of 42 periods; 1,203 of 86,400 since the container started",
+            "not sampled|100000|86400|1203|86400|1203|0|1.00 CPUs; throttled in 1,203 of 86,400 periods since the container started",
+            "half a CPU|50000|86400|1203|86400|1203|0|0.50 CPUs; throttled in 1,203 of 86,400 periods since the container started" })
+    void printsTheCpuLimitAfterSystemProcessors(String description, long quotaMicros, long startPeriods,
+            long startThrottledPeriods, long endPeriods, long endThrottledPeriods, long windowSeconds, String expected) {
+        FakeJvm jvm = new FakeJvm();
+        jvm.cgroupV2(quotaMicros, startPeriods, startThrottledPeriods);
+        FakeJvm later = new FakeJvm();
+        later.cgroupV2(quotaMicros, endPeriods, endThrottledPeriods);
+        jvm.filesAfterPause.putAll(later.files);
+
+        assertThat(TestText.render(new JvmInfoSection(jvm, jvm.snapshot(Duration.ofSeconds(windowSeconds)),
+                Findings.NONE, emptyList(), emptyMap()).lines()))
+                .containsSubsequence(
+                        titled("System Processors", "4 amd64"),
+                        titled("CPU Limit", expected),
+                        titled("System Memory", "1,024 MB available; 4,096 MB total"));
     }
 
     @Test

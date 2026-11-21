@@ -32,6 +32,8 @@ final class JvmInfoSection
     static final String CPU_LOAD = "CPU Load";
     /** The title of the line that {@link FileDescriptorsCheck} marks. */
     static final String FILE_DESCRIPTORS = "File Descriptors";
+    /** The title of the line that {@link CpuThrottledCheck} marks. */
+    static final String CPU_LIMIT = "CPU Limit";
 
     private static final String MASK = "****";
     private static final List<String> SECRET_WORDS = Arrays.asList(
@@ -85,6 +87,9 @@ final class JvmInfoSection
         lines.add(new TitledLine("Hostname", Optional.ofNullable(jvm.environmentVariable("HOSTNAME")).orElse(NOT_AVAILABLE)));
         lines.add(new TitledLine("Operating System", format("%s (%s)", os.getName(), os.getVersion())));
         lines.add(new TitledLine("System Processors", format("%s %s", os.getAvailableProcessors(), os.getArch())));
+        if (snapshot.cpuLimit >= 0) {
+            lines.add(new TitledLine(CPU_LIMIT, cpuLimit() + findings.marker(Finding.lineMark(CPU_LIMIT))));
+        }
         com.sun.management.OperatingSystemMXBean sunOs = SunManagement.operatingSystem(os);
         if (sunOs != null) {
             long freeMemory = sunOs.getFreePhysicalMemorySize();
@@ -140,6 +145,16 @@ final class JvmInfoSection
     private static boolean containsSecretWord(String text, String suffix) {
         String lowerCase = text.toLowerCase(Locale.ROOT);
         return SECRET_WORDS.stream().anyMatch(word -> lowerCase.contains(word + suffix));
+    }
+
+    private String cpuLimit() {
+        if (snapshot.sampled()) {
+            return format(Locale.US, "%.2f CPUs; throttled in %,d of %,d periods; %,d of %,d since the container started",
+                    snapshot.cpuLimit, snapshot.windowCpuThrottledPeriods, snapshot.windowCpuPeriods,
+                    snapshot.cpuThrottledPeriods, snapshot.cpuPeriods);
+        }
+        return format(Locale.US, "%.2f CPUs; throttled in %,d of %,d periods since the container started",
+                snapshot.cpuLimit, snapshot.cpuThrottledPeriods, snapshot.cpuPeriods);
     }
 
     private Collection<String> systemProperties() {

@@ -222,15 +222,10 @@ public class TestThreadSection
     void keepsTheNameReadBeforeSortingWhenAThreadRenamesItself() {
         FakeJvm jvm = new FakeJvm();
         jvm.addThread("before", 23, Thread.State.RUNNABLE);
-        Thread thread = jvm.liveThreads.iterator().next();
-        when(jvm.threads.isThreadCpuTimeSupported()).thenReturn(true);
-        when(jvm.threads.isThreadCpuTimeEnabled()).thenReturn(true);
-        when(jvm.threads.getThreadCpuTime(23)).thenAnswer(invocation -> {
-            thread.setName("after");
-            return 0L;
-        });
+        JvmSnapshot snapshot = jvm.snapshot();
+        jvm.liveThreads.iterator().next().setName("after");
 
-        List<String> text = TestText.render(new ThreadSection(jvm.snapshot(), Findings.NONE, false).lines());
+        List<String> text = TestText.render(new ThreadSection(snapshot, Findings.NONE, false).lines());
 
         assertThat(headersOf(text)).singleElement().satisfies(header -> {
             assertThat(header).startsWith("\"before\"");

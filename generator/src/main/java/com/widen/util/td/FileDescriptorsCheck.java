@@ -22,11 +22,12 @@ final class FileDescriptorsCheck implements Check
     public List<Finding> findings(JvmSnapshot snapshot) {
         long open = snapshot.openFileDescriptors;
         long max = snapshot.maxFileDescriptors;
-        if (open * 100 < MIN_PERCENT * max) {
+        // Divides instead of multiplying the limit, which overflows when the limit is unlimited.
+        long percent = open * 100 / max;
+        if (percent < MIN_PERCENT) {
             return Collections.emptyList();
         }
-        String line = String.format(Locale.US, "%,d of %,d file descriptors are open (%d%%)", open, max,
-                open * 100 / max);
+        String line = String.format(Locale.US, "%,d of %,d file descriptors are open (%d%%)", open, max, percent);
         List<String> marks = Collections.singletonList(Finding.lineMark(JvmInfoSection.FILE_DESCRIPTORS));
         return Collections.singletonList(new Finding(TITLE, Collections.singletonList(line), marks));
     }

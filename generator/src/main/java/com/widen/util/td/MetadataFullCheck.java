@@ -32,6 +32,6 @@ final class MetadataFullCheck implements Check
 
     private static boolean isMetadata(PoolSnapshot pool) {
         return pool.name.equals("Metaspace") || pool.name.equals("Compressed Class Space")
-                || pool.name.equals("Code Cache") || pool.name.startsWith("CodeHeap");
+                || pool.name.equals("Code Cache") || pool.name.equals("CodeCache") || pool.name.startsWith("CodeHeap");
     }
 }

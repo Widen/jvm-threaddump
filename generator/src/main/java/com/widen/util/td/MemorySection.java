@@ -31,7 +31,7 @@ final class MemorySection
             "PS Eden Space", "Par Eden Space", "Par Survivor Space", "PS Survivor Space", "PS Old Gen", "CMS Old Gen",
             "G1 Eden Space", "G1 Survivor Space", "G1 Old Gen",
             "Eden Space", "Survivor Space", "Tenured Gen",
-            "Code Cache", "CodeHeap 'non-nmethods'", "CodeHeap 'profiled nmethods'",
+            "Code Cache", "CodeCache", "CodeHeap 'non-nmethods'", "CodeHeap 'profiled nmethods'",
             "CodeHeap 'non-profiled nmethods'", "Compressed Class Space", "Metaspace"));
 
     private static final String USAGE_LABEL = "used/committed, used/max";

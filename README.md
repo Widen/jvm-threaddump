@@ -299,6 +299,13 @@ read the load. In a container with a CPU limit, the JVM reports use of that
 limit instead of the host's load, so 0.90 means the container is close to being
 throttled.
 
+The dump reads no cgroup files itself. `System Processors`, `System Memory`, and
+`CPU Load` come from the JVM, so they follow the container's limits only when
+the JVM supports the host's cgroup version. Java 17 and later support both
+versions. On Java 8 and 11, cgroup v1 needs 8u302 or 11.0.12, and cgroup v2
+needs 8u372 or 11.0.16. An older JVM reports the host's figures, so
+`CPU Saturated` stays silent while the container is throttled at its limit.
+
 ## The frame filter
 
 Most frames in a stack are plumbing. The thread list hides them, so the
@@ -453,7 +460,8 @@ public class ThreadDumpRegistration implements ServletContextListener
 - `CPU Load`:
   [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
   [JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)
-- `System Uptime`: Linux only; parsed from file `/proc/uptime`
+- `System Uptime`: Linux only; parsed from file `/proc/uptime`, which holds the
+  host's uptime inside a container
 - `Deadlocked Threads`: The threads in the deadlock cycles, each by name and
   id. `None` when the JVM reports no deadlock.
 - `Thread Count`: The number of live threads, then the count per state.

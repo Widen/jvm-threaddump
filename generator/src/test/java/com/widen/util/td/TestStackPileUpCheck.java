@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import static java.util.Collections.emptyList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.Mockito.when;
@@ -37,7 +38,7 @@ public class TestStackPileUpCheck
     }
 
     private static List<Finding> findingsOf(FakeJvm jvm) {
-        return new StackPileUpCheck().findings(jvm.snapshot());
+        return new StackPileUpCheck(emptyList()).findings(jvm.snapshot());
     }
 
     @ParameterizedTest
@@ -177,7 +178,7 @@ public class TestStackPileUpCheck
         }
         jvm.addThread("t", 1000, state, frames);
 
-        assertThat(StackPileUpCheck.idle(jvm.snapshot().threads.get(0))).isEqualTo(expectedIdle);
+        assertThat(new StackPileUpCheck(emptyList()).idle(jvm.snapshot().threads.get(0))).isEqualTo(expectedIdle);
     }
 
     @Test

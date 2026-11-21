@@ -22,6 +22,17 @@ final class StackPileUpCheck implements Check
     private static final List<String> LIBRARY_PREFIXES = Arrays.asList(
             "org.eclipse.jetty.", "org.apache.tomcat.", "org.apache.catalina.", "io.netty.", "com.zaxxer.hikari.");
 
+    private final List<String> libraryPrefixes;
+
+    /**
+     * @param idleLibraryPrefixes package prefixes of server and pool libraries to add to the built-in ones
+     */
+    StackPileUpCheck(List<String> idleLibraryPrefixes) {
+        List<String> libraryPrefixes = new ArrayList<>(LIBRARY_PREFIXES);
+        libraryPrefixes.addAll(idleLibraryPrefixes);
+        this.libraryPrefixes = libraryPrefixes;
+    }
+
     /** The {@code class#method} keys of the native waits a {@code RUNNABLE} thread idles in, on Java 8 and later. */
     private static final Set<String> NATIVE_WAITS = new HashSet<>(Arrays.asList(
             "sun.nio.ch.EPoll#wait",
@@ -80,7 +91,7 @@ final class StackPileUpCheck implements Check
      * accept wait in {@link #NATIVE_WAITS} whatever the frames below it, or when the thread is {@code WAITING} or
      * {@code TIMED_WAITING} and no frame of its stack is application code. A {@code BLOCKED} thread is never idle.
      */
-    static boolean idle(ThreadSnapshot thread) {
+    boolean idle(ThreadSnapshot thread) {
         StackTraceElement[] stack = thread.stack();
         if (stack.length == 0) {
             return true;
@@ -93,7 +104,7 @@ final class StackPileUpCheck implements Check
         }
         for (StackTraceElement frame : stack) {
             String className = frame.getClassName();
-            if (!StackFilter.isJdk(className) && !StackFilter.startsWithAny(className, LIBRARY_PREFIXES)) {
+            if (!StackFilter.isJdk(className) && !StackFilter.startsWithAny(className, libraryPrefixes)) {
                 return false;
             }
         }

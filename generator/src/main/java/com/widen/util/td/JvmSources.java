@@ -56,9 +56,9 @@ interface JvmSources
     long maxMemory();
 
     /**
-     * @return the contents of {@code /proc/uptime}, or empty when the file is unreadable
+     * @return the file's text, or empty when the file is missing or unreadable
      */
-    Optional<String> procUptime();
+    Optional<String> file(String path);
 
     /**
      * @return every live platform thread, read without walking the stacks

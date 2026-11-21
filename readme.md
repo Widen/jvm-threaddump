@@ -52,8 +52,8 @@ file descriptors, and the JVM's configuration.
   application's own calls.
 - **It is safe to leave in production.** The generator has no runtime
   dependencies and runs on Java 8 and later. A dump is immutable and safe to
-  share between threads. System properties that look like secrets print as
-  `****`.
+  share between threads. System properties and main arguments that look like
+  secrets print as `****`.
 
 The cost is time: each dump takes one sampling window, one second by default.
 See [The sampling window](#the-sampling-window) to change it, and
@@ -111,11 +111,13 @@ Two request parameters change one servlet dump:
 
 `ThreadDumpServlet` checks no credentials. Anyone who reaches the path gets the
 whole dump: thread names and stacks that show your code's structure, host and
-JVM details, system properties, and your custom values. The dump masks system
-properties that look like secrets, but the masking matches key and value
-patterns, so a secret under an unusual name prints in full. Never put a secret
-in `customValues`. Each request also holds a container thread for its window,
-up to 30 seconds, so an open `/td` lets anyone tie up request threads.
+JVM details, system properties, main arguments, and your custom values. The dump
+masks system properties and `key=value` main arguments that look like secrets,
+but the masking matches key and value patterns, so a secret under an unusual
+name prints in full. So does a main argument without `=`, such as a secret that
+follows its flag as a separate argument (`--password hunter2`). Never put a
+secret in `customValues`. Each request also holds a container thread for its
+window, up to 30 seconds, so an open `/td` lets anyone tie up request threads.
 
 Use one or more of these:
 
@@ -330,8 +332,9 @@ hidden frames, and the dump omits the line when no frame is hidden:
 
 Build a customized dump with `JvmThreadDump.builder()`:
 
-- `mainArguments(List<String>)` prints the program arguments, such as the
-  `args` of `main`. The default is an empty list.
+- `mainArguments(List<String>)` prints the program arguments, such as the `args`
+  of `main`. A `key=value` argument that looks like a secret prints as
+  `key=****`. The default is an empty list.
 - `customValues(Map<String, ?>)` adds environment-specific lines for
   debugging, such as the application name or the deploy environment. Each entry
   prints as one titled line, in the map's iteration order.
@@ -441,7 +444,8 @@ public class ThreadDumpRegistration implements ServletContextListener
 - `Deadlocked Threads`: The threads in the deadlock cycles, each by name and
   id. `None` when the JVM reports no deadlock.
 - `Thread Count`: The number of live threads, then the count per state.
-- `Main Arguments`: Empty unless the builder sets `mainArguments`.
+- `Main Arguments`: Empty unless the builder sets `mainArguments`. A `key=value`
+  argument follows the masking rule of `JVM System Props`.
 - `JVM System Props`: The `-D` values print as `****` when the key contains
   `password`, `pass`, `pwd`, `secret`, `token`, `credential`, or `key`, when the
   value contains one of those words followed by `=`, or when the value holds a

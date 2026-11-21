@@ -190,6 +190,16 @@ public class TestJvmInfoSection
                 .containsSubsequence(titled("JVM System Props", "a=1"), continued("z.token=****"));
     }
 
+    @Test
+    void masksMainArgumentsThatLookLikeSecrets() {
+        FakeJvm jvm = new FakeJvm();
+        List<String> arguments = Arrays.asList("--port=8080", "--db.password=hunter2", "--token", "abc");
+
+        assertThat(TestText.render(
+                new JvmInfoSection(jvm, jvm.snapshot(), Findings.NONE, arguments, emptyMap()).lines()))
+                .contains(titled("Main Arguments", "--port=8080 --db.password=**** --token abc"));
+    }
+
     private static List<Line> lines(FakeJvm jvm) {
         return new JvmInfoSection(jvm, jvm.snapshot(), Findings.NONE, emptyList(), emptyMap()).lines();
     }

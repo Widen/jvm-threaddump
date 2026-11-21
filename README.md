@@ -215,7 +215,7 @@ CPU time, or allocation figures there.
 | Metadata Full | no | `Metaspace`, `Compressed Class Space`, the code cache (`Code Cache` or `CodeCache`), or a `CodeHeap` pool holds 90% or more of a defined max. |
 | GC Overhead | uses one | Garbage collection took 25% or more of the window and at least 500 ms, or 10% or more of JVM uptime after the first 5 minutes. |
 | CPU Saturated | uses one | The system CPU load is 0.90 or higher. |
-| CPU Throttled | uses one | The kernel throttled the container in 25% or more of the window's periods and at least 2 of them, or for 10% or more of JVM uptime after the first 5 minutes. Needs a container with a CPU limit. |
+| CPU Throttled | uses one | The kernel throttled the container in periods that add up to 25% or more of the window and number at least 2, or for 10% or more of JVM uptime after the first 5 minutes. Needs a container with a CPU limit. |
 | File Descriptors | no | The open file descriptors are 90% or more of the limit. |
 | Hot Threads | yes | A thread used 50% or more of one core during the window. Needs per-thread CPU time to be supported and enabled. |
 
@@ -262,8 +262,10 @@ something on every dump teaches people to skip it:
   Throttling shows as latency, not as load, so a container can be throttled in
   half its periods while `CPU Load` stays under 0.90 and `CPU Saturated` stays
   silent. The kernel counts only the periods in which the container had work to
-  run, so the lifetime measure counts each throttled period as a whole period of
-  elapsed time and compares the total with JVM uptime. The counts come from the
+  run, so both measures count each throttled period as a whole period of
+  elapsed time and compare the total with the window or with JVM uptime. One
+  short burst in an idle window, throttled in both of the two periods it spans,
+  therefore does not flag. The counts come from the
   container's cgroup v1 or v2 files at `/sys/fs/cgroup`. A JVM in a nested
   cgroup on a plain host, such as a systemd service with `CPUQuota`, gets no
   `CPU Limit` line and no check.

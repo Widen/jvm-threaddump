@@ -74,7 +74,9 @@ final class JvmInfoSection
             lines.add(new BlankLine());
         }
 
-        lines.add(new TitledLine("Main Arguments", String.join(" ", mainArguments)));
+        lines.add(new TitledLine("Main Arguments", mainArguments.stream()
+                .map(JvmInfoSection::maskSecret)
+                .collect(Collectors.joining(" "))));
         lines.add(new TitledLine("Default Encoding", jvm.systemProperty("file.encoding")));
         lines.add(new MultiLine("JVM System Props", systemProperties()));
         lines.add(new BlankLine());
@@ -116,11 +118,11 @@ final class JvmInfoSection
     }
 
     /**
-     * Masks the value of a {@code key=value} system property that may hold a secret: the key names one, or the value
-     * holds {@code word=} for one (as in a JDBC URL or an options string), or the value holds a URL password
-     * ({@code ://user:password@}). A property without {@code =} is unchanged.
+     * Masks the value of a {@code key=value} system property or main argument that may hold a secret: the key names
+     * one, or the value holds {@code word=} for one (as in a JDBC URL or an options string), or the value holds a URL
+     * password ({@code ://user:password@}). Text without {@code =} is unchanged.
      *
-     * @param property the property without its {@code -D} prefix
+     * @param property a main argument, or a system property without its {@code -D} prefix
      */
     static String maskSecret(String property) {
         int separator = property.indexOf('=');

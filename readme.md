@@ -196,7 +196,9 @@ covers the checks that ran. A check whose data is unavailable skips itself and
 leaves the count: `CPU Saturated` when the JVM reports no CPU load,
 `File Descriptors` when the JVM's operating system bean is not a Unix one, and
 `Hot Threads` when per-thread CPU time is unsupported or disabled, or when no
-window ran.
+window ran. A `jlink` runtime image built without the `jdk.management` module
+reports neither CPU load nor file descriptors, and the dump has no system
+memory, JVM CPU time, or allocation figures there.
 
 ### The checks
 

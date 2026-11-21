@@ -83,8 +83,8 @@ final class JvmInfoSection
         lines.add(new TitledLine("Hostname", Optional.ofNullable(jvm.environmentVariable("HOSTNAME")).orElse(NOT_AVAILABLE)));
         lines.add(new TitledLine("Operating System", format("%s (%s)", os.getName(), os.getVersion())));
         lines.add(new TitledLine("System Processors", format("%s %s", os.getAvailableProcessors(), os.getArch())));
-        if (os instanceof com.sun.management.OperatingSystemMXBean) {
-            com.sun.management.OperatingSystemMXBean sunOs = (com.sun.management.OperatingSystemMXBean) os;
+        com.sun.management.OperatingSystemMXBean sunOs = SunManagement.operatingSystem(os);
+        if (sunOs != null) {
             long freeMemory = sunOs.getFreePhysicalMemorySize();
             long totalMemory = sunOs.getTotalPhysicalMemorySize();
             lines.add(new TitledLine("System Memory", freeMemory < 0 || totalMemory < 0
@@ -108,8 +108,8 @@ final class JvmInfoSection
         lines.add(new TitledLine("System Uptime", formatTime(uptime[0], TimeUnit.SECONDS)));
         lines.add(new TitledLine("System Idle Time", formatTime(uptime[1], TimeUnit.SECONDS)));
         lines.add(new TitledLine("JVM Uptime", formatTime(snapshot.uptimeMillis, TimeUnit.MILLISECONDS)));
-        lines.add(new TitledLine("JVM CPU Time", os instanceof com.sun.management.OperatingSystemMXBean
-                ? formatTime(((com.sun.management.OperatingSystemMXBean) os).getProcessCpuTime(), TimeUnit.NANOSECONDS)
+        lines.add(new TitledLine("JVM CPU Time", sunOs != null
+                ? formatTime(sunOs.getProcessCpuTime(), TimeUnit.NANOSECONDS)
                 : NOT_AVAILABLE));
         lines.add(new BlankLine());
         return lines;

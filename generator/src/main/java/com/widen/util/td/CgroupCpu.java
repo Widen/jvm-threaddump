@@ -16,13 +16,16 @@ final class CgroupCpu
 
     /** The quota divided by the period, above zero. */
     final double limitCpus;
-    /** {@code nr_periods} */
+    /** The length of one period in microseconds, above zero. */
+    final long periodMicros;
+    /** {@code nr_periods}, which counts only the periods in which the container had work to run. */
     final long periods;
     /** {@code nr_throttled} */
     final long throttledPeriods;
 
-    private CgroupCpu(double limitCpus, long periods, long throttledPeriods) {
+    private CgroupCpu(double limitCpus, long periodMicros, long periods, long throttledPeriods) {
         this.limitCpus = limitCpus;
+        this.periodMicros = periodMicros;
         this.periods = periods;
         this.throttledPeriods = throttledPeriods;
     }
@@ -61,7 +64,7 @@ final class CgroupCpu
             if (periods < 0 || throttledPeriods < 0) {
                 return null;
             }
-            return new CgroupCpu((double) quota / period, periods, throttledPeriods);
+            return new CgroupCpu((double) quota / period, period, periods, throttledPeriods);
         }
         catch (NumberFormatException e) {
             return null;

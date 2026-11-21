@@ -278,6 +278,7 @@ public class TestJvmSnapshot
         JvmSnapshot snapshot = JvmSnapshot.read(jvm, Duration.ofSeconds(1));
 
         assertThat(snapshot.cpuLimit).isEqualTo(1.0);
+        assertThat(snapshot.cpuPeriodMicros).isEqualTo(100_000);
         assertThat(snapshot.cpuPeriods).isEqualTo(142);
         assertThat(snapshot.cpuThrottledPeriods).isEqualTo(31);
         assertThat(snapshot.windowCpuPeriods).isEqualTo(42);

@@ -47,10 +47,11 @@ public class TestCpuThrottledCheck
 
     @ParameterizedTest
     @CsvSource({
-            "8640, 86400, 300000, true",
-            "8639, 86400, 300000, false",
-            "8640, 86400, 299999, false",
-            "0,    0,     300000, false" })
+            "300, 86400, 300000,  true",
+            "299, 86400, 300000,  false",
+            "300, 86400, 299999,  false",
+            "300, 600,   3600000, false",
+            "0,   0,     300000,  false" })
     void flagsALifetimeOfThrottling(long throttled, long periods, long uptimeMillis, boolean flagged) {
         FakeJvm jvm = new FakeJvm();
         jvm.cgroupV2(100_000, periods, throttled);
@@ -61,8 +62,7 @@ public class TestCpuThrottledCheck
         if (flagged) {
             assertThat(findings).hasSize(1);
             assertThat(findings.get(0).lines).containsExactly(
-                    "the kernel has throttled this container in 10% of its periods, an average since it started",
-                    LIMIT_LINE);
+                    "the kernel has throttled this container for 10% of its uptime", LIMIT_LINE);
         }
         else {
             assertThat(findings).isEmpty();
@@ -76,6 +76,7 @@ public class TestCpuThrottledCheck
         FakeJvm later = new FakeJvm();
         later.cgroupV2(100_000, 86_400, 10_365);
         jvm.filesAfterPause.putAll(later.files);
+        when(jvm.runtime.getUptime()).thenReturn(6_000_000L);
 
         List<Finding> findings = new CpuThrottledCheck().findings(jvm.snapshot(Duration.ofMillis(4100)));
 
@@ -83,7 +84,7 @@ public class TestCpuThrottledCheck
         assertThat(findings.get(0).title).isEqualTo("CPU Throttled");
         assertThat(findings.get(0).lines).containsExactly(
                 "the kernel throttled this container in 21 of 42 periods (50%) of the last 4.1s",
-                "the kernel has throttled this container in 11% of its periods, an average since it started",
+                "the kernel has throttled this container for 17% of its uptime",
                 "the limit is 1.00 CPUs");
         assertThat(findings.get(0).marks).containsExactly("line:CPU Limit");
     }

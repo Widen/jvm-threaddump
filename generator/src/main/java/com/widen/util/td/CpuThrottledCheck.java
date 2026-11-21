@@ -7,9 +7,13 @@ import java.util.Locale;
 
 /**
  * Flags a container that the kernel often stops because its threads used the CPU quota before the period ended,
- * measured over the sampling window and over the container's lifetime once the JVM has run for five minutes, because
- * startup work throttles a younger JVM. The window measure needs at least two throttled periods, so one burst in a
- * nearly idle container does not flag.
+ * measured over the sampling window and over the JVM's uptime once the JVM has run for five minutes, because startup
+ * work throttles a younger JVM. The window measure needs at least two throttled periods.
+ * <p>
+ * The kernel counts a period only when the container had work to run in it, so a ratio of its counters would flag a
+ * mostly idle container that was throttled in its few busy periods. The lifetime measure therefore counts each
+ * throttled period as a whole period of elapsed time and compares that with uptime. The counters cover the
+ * container's life, so a JVM that started in an older container also counts the throttling before it.
  */
 final class CpuThrottledCheck implements Check
 {
@@ -37,13 +41,12 @@ final class CpuThrottledCheck implements Check
                     snapshot.windowNanos / 1_000_000_000d));
         }
 
-        long throttled = snapshot.cpuThrottledPeriods;
-        long periods = snapshot.cpuPeriods;
-        if (snapshot.uptimeMillis >= MIN_LIFETIME_UPTIME_MILLIS && periods > 0
-                && throttled * 100 >= MIN_LIFETIME_PERCENT * periods) {
-            lines.add(String.format(Locale.US,
-                    "the kernel has throttled this container in %d%% of its periods, an average since it started",
-                    throttled * 100 / periods));
+        long throttledMicros = snapshot.cpuThrottledPeriods * snapshot.cpuPeriodMicros;
+        long uptimeMillis = snapshot.uptimeMillis;
+        if (uptimeMillis >= MIN_LIFETIME_UPTIME_MILLIS
+                && throttledMicros * 100 >= MIN_LIFETIME_PERCENT * uptimeMillis * 1000) {
+            lines.add(String.format(Locale.US, "the kernel has throttled this container for %d%% of its uptime",
+                    throttledMicros / 10 / uptimeMillis));
         }
 
         if (lines.isEmpty()) {

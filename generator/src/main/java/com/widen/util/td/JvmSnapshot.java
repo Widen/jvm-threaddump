@@ -83,11 +83,9 @@ final class JvmSnapshot
      */
     static JvmSnapshot read(JvmSources jvm, Duration window) {
         ThreadMXBean threadBean = jvm.threads();
-        com.sun.management.ThreadMXBean sunThreadBean = threadBean instanceof com.sun.management.ThreadMXBean
-                ? (com.sun.management.ThreadMXBean) threadBean : null;
+        com.sun.management.ThreadMXBean sunThreadBean = SunManagement.threads(threadBean);
         OperatingSystemMXBean os = jvm.operatingSystem();
-        com.sun.management.OperatingSystemMXBean sunOs = os instanceof com.sun.management.OperatingSystemMXBean
-                ? (com.sun.management.OperatingSystemMXBean) os : null;
+        com.sun.management.OperatingSystemMXBean sunOs = SunManagement.operatingSystem(os);
         boolean cpuTimeAvailable = threadBean.isThreadCpuTimeSupported() && threadBean.isThreadCpuTimeEnabled();
         boolean allocationAvailable = sunThreadBean != null && sunThreadBean.isThreadAllocatedMemorySupported()
                 && sunThreadBean.isThreadAllocatedMemoryEnabled();
@@ -169,8 +167,8 @@ final class JvmSnapshot
         }
         long openFileDescriptors = -1;
         long maxFileDescriptors = -1;
-        if (os instanceof com.sun.management.UnixOperatingSystemMXBean) {
-            com.sun.management.UnixOperatingSystemMXBean unixOs = (com.sun.management.UnixOperatingSystemMXBean) os;
+        com.sun.management.UnixOperatingSystemMXBean unixOs = SunManagement.unixOperatingSystem(os);
+        if (unixOs != null) {
             openFileDescriptors = unixOs.getOpenFileDescriptorCount();
             maxFileDescriptors = unixOs.getMaxFileDescriptorCount();
         }

@@ -306,7 +306,7 @@ of these rules:
 | Reflection and method handles | `sun.reflect.`, `jdk.internal.reflect.`, `java.lang.reflect.`, `java.lang.invoke.` |
 | Generated proxies | a class with no package whose name starts with `$` (a Tapestry service proxy or its advice invocation), `com.sun.proxy.`, `jdk.proxy`, and any class whose name contains `$$` (CGLIB, Javassist, Hibernate proxies, and lambda classes) |
 | Tapestry | everything under `org.apache.tapestry5.` |
-| Server dispatch | `org.eclipse.jetty.`, `org.glassfish.jersey.`, `org.glassfish.hk2.`, `org.jvnet.hk2.`, `javax.servlet.` |
+| Server dispatch | `org.eclipse.jetty.`, `org.glassfish.jersey.`, `org.glassfish.hk2.`, `org.jvnet.hk2.`, `org.apache.catalina.`, `org.apache.coyote.`, `org.apache.tomcat.util.`, `org.apache.tomcat.websocket.`, `javax.servlet.`, `jakarta.servlet.` |
 
 The top frame of a stack always prints, whatever its class, because it says what
 the thread is doing now. One line after the last frame gives the number of

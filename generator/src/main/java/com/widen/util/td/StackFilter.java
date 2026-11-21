@@ -16,7 +16,10 @@ final class StackFilter
             "sun.reflect.", "jdk.internal.reflect.", "java.lang.reflect.", "java.lang.invoke.",
             "com.sun.proxy.", "jdk.proxy",
             "org.apache.tapestry5.",
-            "org.eclipse.jetty.", "org.glassfish.jersey.", "org.glassfish.hk2.", "org.jvnet.hk2.", "javax.servlet.");
+            "org.eclipse.jetty.", "org.glassfish.jersey.", "org.glassfish.hk2.", "org.jvnet.hk2.",
+            // Not all of org.apache.tomcat., which would hide the Tomcat JDBC pool a thread waits in.
+            "org.apache.catalina.", "org.apache.coyote.", "org.apache.tomcat.util.", "org.apache.tomcat.websocket.",
+            "javax.servlet.", "jakarta.servlet.");
 
     private StackFilter() {
     }

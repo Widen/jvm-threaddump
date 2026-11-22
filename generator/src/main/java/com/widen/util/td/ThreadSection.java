@@ -1,10 +1,10 @@
 package com.widen.util.td;
 
 import java.lang.management.ThreadInfo;
-import java.lang.management.ThreadMXBean;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -15,63 +15,72 @@ import static com.widen.util.td.Line.TitledLine;
 import static java.lang.String.format;
 
 /**
- * Every live thread with its state, lock, and stack. A thread prints only when it is in both the live thread set and
- * the {@link ThreadMXBean} snapshot, so each header and stack come from one consistent moment.
+ * Every thread in the snapshot with its state, lock, and stack.
  */
 final class ThreadSection
 {
-    private static final Comparator<ThreadSnapshot> ORDER = Comparator
-            .comparing((ThreadSnapshot snapshot) -> snapshot.name, String.CASE_INSENSITIVE_ORDER)
-            .thenComparing(snapshot -> snapshot.name)
-            .thenComparingLong(snapshot -> snapshot.thread.getId());
+    private final JvmSnapshot snapshot;
+    private final Findings findings;
+    private final boolean allFrames;
 
-    private final JvmSources jvm;
-
-    ThreadSection(JvmSources jvm) {
-        this.jvm = jvm;
+    ThreadSection(JvmSnapshot snapshot, Findings findings, boolean allFrames) {
+        this.snapshot = snapshot;
+        this.findings = findings;
+        this.allFrames = allFrames;
     }
 
     List<Line> lines() {
-        ThreadMXBean threadBean = jvm.threads();
-        boolean cpuTimeEnabled = threadBean.isThreadCpuTimeSupported() && threadBean.isThreadCpuTimeEnabled();
-
-        Map<Long, ThreadInfo> infos = new HashMap<>();
-        for (ThreadInfo info : threadBean.dumpAllThreads(false, false)) {
-            infos.put(info.getThreadId(), info);
-        }
-        List<ThreadSnapshot> threads = new ArrayList<>();
-        for (Thread thread : jvm.liveThreads()) {
-            ThreadInfo info = infos.get(thread.getId());
-            if (info != null) {
-                threads.add(new ThreadSnapshot(thread, info, thread.getName(), thread.toString()));
-            }
-        }
-        threads.sort(ORDER);
-
         List<Line> lines = new ArrayList<>();
-        lines.add(new TitledLine("Thread Count", String.valueOf(threads.size())));
+        String count = String.valueOf(snapshot.threads.size());
+        if (!snapshot.threads.isEmpty()) {
+            count += " (" + formatStateCounts(snapshot.threads) + ")";
+        }
+        lines.add(new TitledLine("Thread Count", count));
         lines.add(new BlankLine());
-        for (ThreadSnapshot snapshot : threads) {
-            Thread thread = snapshot.thread;
-            ThreadInfo info = snapshot.info;
-            long cpuTimeNanos = cpuTimeEnabled ? threadBean.getThreadCpuTime(thread.getId()) : -1;
-            lines.add(new SimpleLine(formatHeader(snapshot, cpuTimeNanos)));
-            for (StackTraceElement frame : info.getStackTrace()) {
+        for (ThreadSnapshot thread : snapshot.threads) {
+            lines.add(new SimpleLine(formatHeader(thread) + findings.marker(Finding.threadMark(thread.id()))));
+            StackTraceElement[] stack = thread.stack();
+            List<StackTraceElement> shown = allFrames ? Arrays.asList(stack) : StackFilter.kept(stack);
+            for (StackTraceElement frame : shown) {
                 lines.add(new SimpleLine(formatFrame(frame)));
+            }
+            int hiddenCount = stack.length - shown.size();
+            if (hiddenCount > 0) {
+                lines.add(new SimpleLine("    ... " + hiddenCount + (hiddenCount == 1 ? " frame" : " frames")
+                        + " hidden"));
             }
             lines.add(new BlankLine());
         }
         return lines;
     }
 
-    private static String formatHeader(ThreadSnapshot snapshot, long cpuTimeNanos) {
-        Thread thread = snapshot.thread;
-        ThreadInfo info = snapshot.info;
-        String name = snapshot.name;
-        ThreadGroup group = thread.getThreadGroup();
+    /**
+     * Counts the threads per state, such as {@code 12 RUNNABLE, 43 BLOCKED}, in {@link Thread.State} order and
+     * without the states that have no threads.
+     */
+    static String formatStateCounts(Collection<ThreadSnapshot> threads) {
+        Map<Thread.State, Integer> counts = new EnumMap<>(Thread.State.class);
+        for (ThreadSnapshot thread : threads) {
+            counts.merge(thread.state(), 1, Integer::sum);
+        }
+        StringBuilder text = new StringBuilder();
+        for (Map.Entry<Thread.State, Integer> entry : counts.entrySet()) {
+            if (text.length() > 0) {
+                text.append(", ");
+            }
+            text.append(entry.getValue()).append(' ').append(entry.getKey());
+        }
+        return text.toString();
+    }
+
+    private static String formatHeader(ThreadSnapshot thread) {
+        Thread liveThread = thread.thread;
+        ThreadInfo info = thread.info;
+        String name = thread.name;
+        ThreadGroup group = liveThread.getThreadGroup();
         StringBuilder header = new StringBuilder(format(Locale.US, "\"%s\"%s priority=%d id=0x%x group=%s cpu=%s block_cnt=%d wait_cnt=%d %s",
-                name, thread.isDaemon() ? " daemon" : "", thread.getPriority(), thread.getId(),
-                group == null ? "-DEAD-" : group.getName(), formatCpuTime(cpuTimeNanos), info.getBlockedCount(),
+                name, liveThread.isDaemon() ? " daemon" : "", liveThread.getPriority(), liveThread.getId(),
+                group == null ? "-DEAD-" : group.getName(), formatCpuTime(thread.cpuNanos), info.getBlockedCount(),
                 info.getWaitedCount(), info.getThreadState()));
 
         long lockOwnerId = info.getLockOwnerId();
@@ -85,7 +94,7 @@ final class ThreadSection
         }
 
         // skip the standard Thread.toString() and a toString() that repeats the name
-        String threadToString = snapshot.toString;
+        String threadToString = thread.toString;
         if (threadToString != null && !threadToString.startsWith("Thread[") && !threadToString.equalsIgnoreCase(name)) {
             header.append(format(" (%s)", threadToString));
         }
@@ -119,24 +128,5 @@ final class ThreadSection
             sb.append("(Unknown Source)");
         }
         return sb.toString();
-    }
-
-    /**
-     * A thread with its name and {@code toString()} read once, so a thread that renames itself cannot change its sort
-     * position or header mid-dump.
-     */
-    private static final class ThreadSnapshot
-    {
-        private final Thread thread;
-        private final ThreadInfo info;
-        private final String name;
-        private final String toString;
-
-        ThreadSnapshot(Thread thread, ThreadInfo info, String name, String toString) {
-            this.thread = thread;
-            this.info = info;
-            this.name = name;
-            this.toString = toString;
-        }
     }
 }

@@ -1,6 +1,5 @@
 package com.widen.util.td;
 
-import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.MemoryUsage;
 import java.text.NumberFormat;
 import java.util.ArrayList;
@@ -32,15 +31,19 @@ final class MemorySection
             "PS Eden Space", "Par Eden Space", "Par Survivor Space", "PS Survivor Space", "PS Old Gen", "CMS Old Gen",
             "G1 Eden Space", "G1 Survivor Space", "G1 Old Gen",
             "Eden Space", "Survivor Space", "Tenured Gen",
-            "Code Cache", "CodeHeap 'non-nmethods'", "CodeHeap 'profiled nmethods'",
+            "Code Cache", "CodeCache", "CodeHeap 'non-nmethods'", "CodeHeap 'profiled nmethods'",
             "CodeHeap 'non-profiled nmethods'", "Compressed Class Space", "Metaspace"));
 
     private static final String USAGE_LABEL = "used/committed, used/max";
 
     private final JvmSources jvm;
+    private final JvmSnapshot snapshot;
+    private final Findings findings;
 
-    MemorySection(JvmSources jvm) {
+    MemorySection(JvmSources jvm, JvmSnapshot snapshot, Findings findings) {
         this.jvm = jvm;
+        this.snapshot = snapshot;
+        this.findings = findings;
     }
 
     List<Line> lines() {
@@ -61,19 +64,17 @@ final class MemorySection
 
         lines.add(new TitledLine("Collector", USAGE_LABEL));
         Map<String, MemoryUsage> pools = new TreeMap<>();
-        for (MemoryPoolMXBean pool : jvm.memoryPools()) {
-            MemoryUsage usage = pool.getUsage();
-            if (usage != null) {
-                pools.put(pool.getName(), usage);
-            }
+        for (PoolSnapshot pool : snapshot.pools) {
+            pools.put(pool.name, pool.usage);
         }
         for (String name : POOL_ORDER) {
             MemoryUsage usage = pools.remove(name);
             if (usage != null) {
-                lines.add(new TitledLine(name, formatUsage(usage)));
+                lines.add(new TitledLine(name, formatUsage(usage) + findings.marker(Finding.poolMark(name))));
             }
         }
-        pools.forEach((name, usage) -> lines.add(new TitledLine(name + "*", formatUsage(usage))));
+        pools.forEach((name, usage) -> lines.add(
+                new TitledLine(name + "*", formatUsage(usage) + findings.marker(Finding.poolMark(name)))));
         lines.add(new BlankLine());
         return lines;
     }

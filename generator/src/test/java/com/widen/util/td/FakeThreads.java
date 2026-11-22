@@ -41,6 +41,11 @@ final class FakeThreads
         return thread;
     }
 
+    static StackTraceElement frame(String className, String method) {
+        String simpleName = className.substring(className.lastIndexOf('.') + 1);
+        return new StackTraceElement(className, method, simpleName + ".java", 1);
+    }
+
     static ThreadInfo info(long id, Thread.State state, StackTraceElement... frames) {
         ThreadInfo info = mock(ThreadInfo.class);
         when(info.getThreadId()).thenReturn(id);

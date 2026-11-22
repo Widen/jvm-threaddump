@@ -3,12 +3,14 @@ package com.widen.util.td;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.MemoryType;
 import java.lang.management.MemoryUsage;
 import java.lang.management.OperatingSystemMXBean;
 import java.lang.management.RuntimeMXBean;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -35,10 +37,11 @@ final class FakeJvm implements JvmSources
 
     RuntimeMXBean runtime = mockRuntime();
     MemoryMXBean memory = mockMemory();
-    ThreadMXBean threads = mockThreads();
+    final List<ThreadInfo> threadInfos = new ArrayList<>();
+    com.sun.management.ThreadMXBean threads = mockThreads();
     List<MemoryPoolMXBean> memoryPools = new ArrayList<>();
     List<GarbageCollectorMXBean> garbageCollectors = new ArrayList<>();
-    OperatingSystemMXBean operatingSystem = mockOperatingSystem();
+    OperatingSystemMXBean operatingSystem = mockOperatingSystem(com.sun.management.OperatingSystemMXBean.class);
     Clock clock = Clock.fixed(Instant.parse("2026-11-20T15:30:00Z"), ZoneOffset.UTC);
     TimeZone timeZone = TimeZone.getTimeZone("UTC");
     Map<String, String> environment = new HashMap<>();
@@ -47,6 +50,10 @@ final class FakeJvm implements JvmSources
     long maxMemory = 512 * MB;
     Optional<String> procUptime = Optional.of("93784.56 12345.67\n");
     Set<Thread> liveThreads = new HashSet<>();
+    long nanoTime;
+    int pauses;
+    /** When set, {@code pause} advances the clock by this much and throws {@link InterruptedException}. */
+    Duration interruptPauseAfter;
 
     FakeJvm() {
         environment.put("HOSTNAME", "app-1");
@@ -74,17 +81,20 @@ final class FakeJvm implements JvmSources
         return bean;
     }
 
-    private static ThreadMXBean mockThreads() {
-        ThreadMXBean bean = mock(ThreadMXBean.class);
+    private com.sun.management.ThreadMXBean mockThreads() {
+        com.sun.management.ThreadMXBean bean = mock(com.sun.management.ThreadMXBean.class);
         when(bean.findDeadlockedThreads()).thenReturn(null);
-        when(bean.dumpAllThreads(anyBoolean(), anyBoolean())).thenReturn(new ThreadInfo[0]);
+        when(bean.dumpAllThreads(anyBoolean(), anyBoolean()))
+                .thenAnswer(invocation -> threadInfos.toArray(new ThreadInfo[0]));
+        when(bean.getAllThreadIds())
+                .thenAnswer(invocation -> liveThreads.stream().mapToLong(Thread::getId).toArray());
         when(bean.isThreadCpuTimeSupported()).thenReturn(false);
         when(bean.isCurrentThreadCpuTimeSupported()).thenReturn(false);
         return bean;
     }
 
-    private static OperatingSystemMXBean mockOperatingSystem() {
-        com.sun.management.OperatingSystemMXBean bean = mock(com.sun.management.OperatingSystemMXBean.class);
+    private static <T extends com.sun.management.OperatingSystemMXBean> T mockOperatingSystem(Class<T> type) {
+        T bean = mock(type);
         when(bean.getName()).thenReturn("Linux");
         when(bean.getVersion()).thenReturn("5.10");
         when(bean.getAvailableProcessors()).thenReturn(4);
@@ -95,6 +105,96 @@ final class FakeJvm implements JvmSources
         when(bean.getProcessCpuLoad()).thenReturn(0.125);
         when(bean.getProcessCpuTime()).thenReturn(61_000_000_000L);
         return bean;
+    }
+
+    /**
+     * Adds a live thread and the matching {@link ThreadInfo} to what {@code dumpAllThreads} returns.
+     */
+    ThreadInfo addThread(String name, long id, Thread.State state, StackTraceElement... frames) {
+        liveThreads.add(FakeThreads.thread(name, id));
+        ThreadInfo info = FakeThreads.info(id, state, frames);
+        threadInfos.add(info);
+        return info;
+    }
+
+    /**
+     * Adds a thread that reports {@code ownerId} as the owner of the lock it waits for.
+     */
+    ThreadInfo addThreadWaitingOn(String name, long id, Thread.State state, long ownerId, String lockName,
+            StackTraceElement... frames) {
+        ThreadInfo info = addThread(name, id, state, frames);
+        when(info.getLockOwnerId()).thenReturn(ownerId);
+        when(info.getLockName()).thenReturn(lockName);
+        return info;
+    }
+
+    MemoryPoolMXBean addPool(String name, MemoryType type, MemoryUsage usage, MemoryUsage collectionUsage) {
+        MemoryPoolMXBean pool = mock(MemoryPoolMXBean.class);
+        when(pool.getName()).thenReturn(name);
+        when(pool.getType()).thenReturn(type);
+        when(pool.getUsage()).thenReturn(usage);
+        when(pool.getCollectionUsage()).thenReturn(collectionUsage);
+        memoryPools.add(pool);
+        return pool;
+    }
+
+    GarbageCollectorMXBean addCollector(String name, long count, long timeMillis) {
+        GarbageCollectorMXBean collector = mock(GarbageCollectorMXBean.class);
+        when(collector.getName()).thenReturn(name);
+        when(collector.getCollectionCount()).thenReturn(count);
+        when(collector.getCollectionTime()).thenReturn(timeMillis);
+        garbageCollectors.add(collector);
+        return collector;
+    }
+
+    /** Makes the thread bean report per-thread allocation. */
+    void enableAllocation() {
+        when(threads.isThreadAllocatedMemorySupported()).thenReturn(true);
+        when(threads.isThreadAllocatedMemoryEnabled()).thenReturn(true);
+    }
+
+    /** Adds a thread that allocates {@code bytes} between the start and the end of a sampling window. */
+    ThreadInfo addAllocatingThread(String name, long id, long bytes) {
+        ThreadInfo info = addThread(name, id, Thread.State.RUNNABLE);
+        when(threads.getThreadAllocatedBytes(id)).thenReturn(0L, bytes);
+        return info;
+    }
+
+    /** Sets the system and JVM CPU loads the operating system bean reports. */
+    void cpuLoads(double system, double process) {
+        com.sun.management.OperatingSystemMXBean sunOs = (com.sun.management.OperatingSystemMXBean) operatingSystem;
+        when(sunOs.getSystemCpuLoad()).thenReturn(system);
+        when(sunOs.getProcessCpuLoad()).thenReturn(process);
+    }
+
+    /** Replaces the operating system bean with a Unix one that reports the given descriptor counts. */
+    void unixOperatingSystem(long openFileDescriptors, long maxFileDescriptors) {
+        com.sun.management.UnixOperatingSystemMXBean unix = mockOperatingSystem(
+                com.sun.management.UnixOperatingSystemMXBean.class);
+        when(unix.getOpenFileDescriptorCount()).thenReturn(openFileDescriptors);
+        when(unix.getMaxFileDescriptorCount()).thenReturn(maxFileDescriptors);
+        operatingSystem = unix;
+    }
+
+    /** Makes the thread bean report per-thread CPU time. */
+    void enableCpuTime() {
+        when(threads.isThreadCpuTimeSupported()).thenReturn(true);
+        when(threads.isThreadCpuTimeEnabled()).thenReturn(true);
+    }
+
+    /** Adds a thread that uses {@code cpuNanos} of CPU time between the start and the end of a sampling window. */
+    ThreadInfo addBusyThread(String name, long id, long cpuNanos, StackTraceElement... frames) {
+        ThreadInfo info = addThread(name, id, Thread.State.RUNNABLE, frames);
+        when(threads.getThreadCpuTime(id)).thenReturn(0L, cpuNanos);
+        return info;
+    }
+
+    JvmSnapshot snapshot() {
+        return snapshot(Duration.ZERO);
+    }
+
+    JvmSnapshot snapshot(Duration window) {
+        return JvmSnapshot.read(this, window);
     }
 
     @Override
@@ -165,5 +265,20 @@ final class FakeJvm implements JvmSources
     @Override
     public Set<Thread> liveThreads() {
         return liveThreads;
+    }
+
+    @Override
+    public void pause(Duration duration) throws InterruptedException {
+        pauses++;
+        if (interruptPauseAfter != null) {
+            nanoTime += interruptPauseAfter.toNanos();
+            throw new InterruptedException();
+        }
+        nanoTime += duration.toNanos();
+    }
+
+    @Override
+    public long nanoTime() {
+        return nanoTime;
     }
 }

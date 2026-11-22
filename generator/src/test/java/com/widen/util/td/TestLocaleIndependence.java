@@ -27,7 +27,8 @@ public class TestLocaleIndependence
 
         assertThat(MemorySection.formatUsage(new MemoryUsage(256 * MB, 64 * MB, 128 * MB, 256 * MB)))
                 .startsWith("50%/25%");
-        assertThat(TestText.render(new JvmInfoSection(new FakeJvm(), emptyList(), emptyMap()).lines()))
+        FakeJvm jvm = new FakeJvm();
+        assertThat(TestText.render(new JvmInfoSection(jvm, jvm.snapshot(), Findings.NONE, emptyList(), emptyMap()).lines()))
                 .contains(titled("CPU Load", "0.2500 system; 0.1250 jvm (0.0 to 1.0)"));
     }
 }

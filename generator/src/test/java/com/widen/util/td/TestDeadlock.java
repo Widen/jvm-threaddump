@@ -1,7 +1,6 @@
 package com.widen.util.td;
 
-import java.util.Arrays;
-import java.util.List;
+import java.time.Duration;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,20 +15,24 @@ public class TestDeadlock
     @Test
     void reportsDeadlockedThreadsAndClearsThemAfterward() throws Exception {
         try (DeadlockFixture deadlock = DeadlockFixture.start()) {
-            String dump = JvmThreadDump.create().generate();
-            String[] fixtureIds = Arrays.stream(deadlock.threadIds())
-                    .mapToObj(id -> "0x" + Long.toHexString(id))
-                    .toArray(String[]::new);
-            assertThat(deadlockedThreadIds(dump)).contains(fixtureIds);
+            String dump = withoutSampling().generate();
+            assertThat(dump).contains("Deadlock: 2 threads block each other");
+            assertThat(deadlockedThreadsLine(dump))
+                    .contains("\"deadlock-fixture-1\" (0x" + Long.toHexString(deadlock.threadIds()[0]) + ")")
+                    .contains("\"deadlock-fixture-2\" (0x" + Long.toHexString(deadlock.threadIds()[1]) + ")");
         }
-        assertThat(JvmThreadDump.create().generate())
+        assertThat(withoutSampling().generate())
                 .contains("Deadlocked Threads: None");
     }
 
-    private static List<String> deadlockedThreadIds(String dump) {
+    private static JvmThreadDump withoutSampling() {
+        return JvmThreadDump.builder().sampleWindow(Duration.ZERO).build();
+    }
+
+    private static String deadlockedThreadsLine(String dump) {
         Matcher line = DEADLOCKED_LINE.matcher(dump);
         assertThat(line.find()).as("a Deadlocked Threads line in the dump").isTrue();
-        return Arrays.asList(line.group(1).trim().split(", "));
+        return line.group(1);
     }
 
 }

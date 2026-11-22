@@ -28,17 +28,27 @@ import static java.lang.String.format;
  */
 final class JvmInfoSection
 {
+    /** The title of the line that {@link CpuSaturatedCheck} marks. */
+    static final String CPU_LOAD = "CPU Load";
+    /** The title of the line that {@link FileDescriptorsCheck} marks. */
+    static final String FILE_DESCRIPTORS = "File Descriptors";
+
     private static final String MASK = "****";
     private static final List<String> SECRET_WORDS = Arrays.asList(
             "password", "pass", "pwd", "secret", "token", "credential", "key");
     private static final Pattern URL_PASSWORD = Pattern.compile("://[^/@:]*:[^/@]*@");
 
     private final JvmSources jvm;
+    private final JvmSnapshot snapshot;
+    private final Findings findings;
     private final List<String> mainArguments;
     private final Map<String, ?> customValues;
 
-    JvmInfoSection(JvmSources jvm, List<String> mainArguments, Map<String, ?> customValues) {
+    JvmInfoSection(JvmSources jvm, JvmSnapshot snapshot, Findings findings, List<String> mainArguments,
+            Map<String, ?> customValues) {
         this.jvm = jvm;
+        this.snapshot = snapshot;
+        this.findings = findings;
         this.mainArguments = mainArguments;
         this.customValues = customValues;
     }
@@ -64,7 +74,9 @@ final class JvmInfoSection
             lines.add(new BlankLine());
         }
 
-        lines.add(new TitledLine("Main Arguments", String.join(" ", mainArguments)));
+        lines.add(new TitledLine("Main Arguments", mainArguments.stream()
+                .map(JvmInfoSection::maskSecret)
+                .collect(Collectors.joining(" "))));
         lines.add(new TitledLine("Default Encoding", jvm.systemProperty("file.encoding")));
         lines.add(new MultiLine("JVM System Props", systemProperties()));
         lines.add(new BlankLine());
@@ -73,41 +85,44 @@ final class JvmInfoSection
         lines.add(new TitledLine("Hostname", Optional.ofNullable(jvm.environmentVariable("HOSTNAME")).orElse(NOT_AVAILABLE)));
         lines.add(new TitledLine("Operating System", format("%s (%s)", os.getName(), os.getVersion())));
         lines.add(new TitledLine("System Processors", format("%s %s", os.getAvailableProcessors(), os.getArch())));
-        if (os instanceof com.sun.management.OperatingSystemMXBean) {
-            com.sun.management.OperatingSystemMXBean sunOs = (com.sun.management.OperatingSystemMXBean) os;
+        com.sun.management.OperatingSystemMXBean sunOs = SunManagement.operatingSystem(os);
+        if (sunOs != null) {
             long freeMemory = sunOs.getFreePhysicalMemorySize();
             long totalMemory = sunOs.getTotalPhysicalMemorySize();
             lines.add(new TitledLine("System Memory", freeMemory < 0 || totalMemory < 0
                     ? NOT_AVAILABLE
                     : format("%s available; %s total", byteCountToDisplaySize(freeMemory), byteCountToDisplaySize(totalMemory))));
-            double systemCpuLoad = sunOs.getSystemCpuLoad();
-            double processCpuLoad = sunOs.getProcessCpuLoad();
-            lines.add(new TitledLine("CPU Load", systemCpuLoad < 0 || processCpuLoad < 0
-                    ? NOT_AVAILABLE
-                    : format(Locale.US, "%.4f system; %.4f jvm (0.0 to 1.0)", systemCpuLoad, processCpuLoad)));
         }
         else {
             lines.add(new TitledLine("System Memory", NOT_AVAILABLE));
-            lines.add(new TitledLine("CPU Load", NOT_AVAILABLE));
         }
+        String fileDescriptors = snapshot.openFileDescriptors < 0 || snapshot.maxFileDescriptors < 0
+                ? NOT_AVAILABLE
+                : format(Locale.US, "%,d open; %,d limit", snapshot.openFileDescriptors, snapshot.maxFileDescriptors);
+        lines.add(new TitledLine(FILE_DESCRIPTORS,
+                fileDescriptors + findings.marker(Finding.lineMark(FILE_DESCRIPTORS))));
+        String cpuLoad = snapshot.systemCpuLoad < 0 || snapshot.processCpuLoad < 0
+                ? NOT_AVAILABLE
+                : format(Locale.US, "%.4f system; %.4f jvm (0.0 to 1.0)", snapshot.systemCpuLoad, snapshot.processCpuLoad);
+        lines.add(new TitledLine(CPU_LOAD, cpuLoad + findings.marker(Finding.lineMark(CPU_LOAD))));
 
         long[] uptime = systemUptimeSeconds();
         lines.add(new TitledLine("System Uptime", formatTime(uptime[0], TimeUnit.SECONDS)));
         lines.add(new TitledLine("System Idle Time", formatTime(uptime[1], TimeUnit.SECONDS)));
-        lines.add(new TitledLine("JVM Uptime", formatTime(jvm.runtime().getUptime(), TimeUnit.MILLISECONDS)));
-        lines.add(new TitledLine("JVM CPU Time", os instanceof com.sun.management.OperatingSystemMXBean
-                ? formatTime(((com.sun.management.OperatingSystemMXBean) os).getProcessCpuTime(), TimeUnit.NANOSECONDS)
+        lines.add(new TitledLine("JVM Uptime", formatTime(snapshot.uptimeMillis, TimeUnit.MILLISECONDS)));
+        lines.add(new TitledLine("JVM CPU Time", sunOs != null
+                ? formatTime(sunOs.getProcessCpuTime(), TimeUnit.NANOSECONDS)
                 : NOT_AVAILABLE));
         lines.add(new BlankLine());
         return lines;
     }
 
     /**
-     * Masks the value of a {@code key=value} system property that may hold a secret: the key names one, or the value
-     * holds {@code word=} for one (as in a JDBC URL or an options string), or the value holds a URL password
-     * ({@code ://user:password@}). A property without {@code =} is unchanged.
+     * Masks the value of a {@code key=value} system property or main argument that may hold a secret: the key names
+     * one, or the value holds {@code word=} for one (as in a JDBC URL or an options string), or the value holds a URL
+     * password ({@code ://user:password@}). Text without {@code =} is unchanged.
      *
-     * @param property the property without its {@code -D} prefix
+     * @param property a main argument, or a system property without its {@code -D} prefix
      */
     static String maskSecret(String property) {
         int separator = property.indexOf('=');

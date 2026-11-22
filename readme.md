@@ -1,13 +1,21 @@
 # Simple JVM Thread Dump
 
-This project formats JVM info as simple text. It works well as a zero-configuration debugging tool for web-based applications.
+This project formats JVM info as simple text. It works well as a
+zero-configuration debugging tool for web-based applications.
 
-There are no classpath dependencies; all utility classes are included and package private.
+The generator module has no dependencies; all utility classes are included and
+package private.
+
+The servlet module depends on the generator. It expects the servlet container or
+your application to supply `javax.servlet:javax.servlet-api` 3.0.1 through 4.x.
+Jakarta containers (Servlet 5 and later, such as Tomcat 10+ and Jetty 11+)
+are not supported.
 
 ## Usage
 
 Direct instantiation:
-```
+
+```text
 import com.widen.util.td.ThreadDumpServlet;
 
 JvmThreadDump out = new JvmThreadDump();
@@ -16,7 +24,8 @@ System.out.println(dump);
 ```
 
 Servlet configuration:
-```
+
+```text
 <web-app>
   <servlet>
     <servlet-name>threaddump</servlet-name>
@@ -36,13 +45,16 @@ Overridable methods for customization:
 - `List<String> getMainArguments()`
   - The default method returns an empty list.
 - `Map<String, Object> getCustomValues()`
-  - Useful if you have environment specific information to aid in debugging the application.
-  - `String.valueOf(...)` is used to generate a text representation of the value Object.
+  - Useful if you have environment specific information to aid in debugging the
+    application.
+  - `String.valueOf(...)` is used to generate a text representation of the value
+    Object.
 
+The supplied servlet does not support using a custom `JvmThreadDump` class. We
+recommend that you copy `ThreadDumpServlet.java` into your source tree and
+modify as required.
 
-The supplied servlet does not support using a custom `JvmThreadDump` class. We recommend that you copy  `ThreadDumpServlet.java` into your source tree and modify as required.
-
-```
+```text
 public class MyAppThreadDumpServlet extends HttpServlet
 {
     private final String appName;
@@ -101,14 +113,16 @@ public class MyAppThreadDumpServlet extends HttpServlet
 ## Glossary
 
 - `Hostname`: `System.getenv('HOSTNAME')`
-- `CPU Load`: [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
-[JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)
+- `CPU Load`:
+  [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
+  [JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)
 - `System Uptime`: Linux only; parsed from file `/proc/uptime`
-- `Main Arguments`: Will be empty unless you override and implement `getMainArguments()`.
+- `Main Arguments`: Will be empty unless you override and implement
+  `getMainArguments()`.
 
 ## Example Output
 
-```
+```text
           Current Time: 01/30/2019 11:18:17 CST
      Default Time Zone: Central Standard Time (America/Chicago)
           Java Version: 1.8.0_191-b12 (Oracle Corporation)
@@ -211,6 +225,48 @@ Compressed Class Space: 81%/0%        init=0 bytes     used=827 KB      commit=1
     java.lang.ref.Reference$ReferenceHandler.run(Reference.java:153)
 
 "Signal Dispatcher" daemon priority=9 id=0x4 group=system cpu=0ms block_cnt=0 wait_cnt=0 RUNNABLE
+```
+
+## Build
+
+Install the tools, then run the tests on Java 17 and Java 8:
+
+```sh
+mise install
+./gradlew check
+```
+
+`mise.toml` installs Java 21, which runs Gradle, and Corretto 8, which it
+exposes to Gradle through the `JDK8` variable. The build compiles with a Java
+17 toolchain and `--release 8`, so the JARs run on Java 8 and later. `test`
+runs the tests on Java 17, and `testOnJava8` runs them on Java 8. Gradle
+downloads a missing JDK.
+
+When the JFrog credentials described below are set, dependencies resolve
+through the Acquia JFrog `widen-java-virtual` repository. Without them,
+dependencies resolve from Maven Central, so building and testing need no
+credentials.
+
+The version lives in `gradle.properties`. To publish to Acquia JFrog, run:
+
+```sh
+./gradlew publish
+```
+
+A version that ends in `-SNAPSHOT` goes to the `libs-snapshots-local`
+repository. Any other version goes to `libs-releases-local`. Publishing needs
+the credentials in `ACQUIA_JFROG_USER` and `ACQUIA_JFROG_TOKEN`. Set them as
+environment variables, or as Gradle properties of the same names, for example
+in `~/.gradle/gradle.properties`.
+
+The wrapper pins the Gradle distribution's checksum in
+`gradle/wrapper/gradle-wrapper.properties`. To upgrade Gradle, take the
+checksum from
+`https://services.gradle.org/distributions/gradle-VERSION-bin.zip.sha256` and
+run:
+
+```sh
+./gradlew wrapper --gradle-version VERSION --gradle-distribution-sha256-sum SUM
 ```
 
 ## License

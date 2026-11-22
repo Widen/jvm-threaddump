@@ -83,9 +83,9 @@ final class PlatformJvmSources implements JvmSources
     }
 
     @Override
-    public Optional<String> procUptime() {
+    public Optional<String> file(String path) {
         try {
-            return Optional.of(new String(Files.readAllBytes(Paths.get("/proc/uptime")), StandardCharsets.US_ASCII));
+            return Optional.of(new String(Files.readAllBytes(Paths.get(path)), StandardCharsets.US_ASCII));
         }
         catch (IOException e) {
             return Optional.empty();

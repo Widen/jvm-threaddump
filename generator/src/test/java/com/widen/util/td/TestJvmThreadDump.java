@@ -53,6 +53,25 @@ public class TestJvmThreadDump
     }
 
     @Test
+    void flagsAThrottledContainerAsATenthCheck() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.enableCpuTime();
+        jvm.unixOperatingSystem(412, 65_536);
+        jvm.cgroupV2(100_000, 100, 0);
+        FakeJvm later = new FakeJvm();
+        later.cgroupV2(100_000, 110, 5);
+        jvm.filesAfterPause.putAll(later.files);
+
+        String dump = JvmThreadDump.builder().jvmSources(jvm).build().generate();
+
+        assertThat(dump)
+                .contains(titled("Findings", "1 of 10 checks flagged something (sampled over 1.0s)"))
+                .contains(titled("CPU Throttled", "the kernel throttled this container in 5 periods (50%) of the last 1.0s"))
+                .contains(titled("CPU Limit", "1.00 CPUs; throttled in 5 of 10 periods; 5 of 110 since the container started <<< CPU Throttled"));
+        assertThat(dump.indexOf("CPU Saturated")).isLessThan(0);
+    }
+
+    @Test
     void returnsTheSameDumpOnRepeatCalls() {
         JvmThreadDump dump = JvmThreadDump.builder().jvmSources(new FakeJvm()).build();
 

@@ -48,7 +48,10 @@ final class FakeJvm implements JvmSources
     Map<String, String> systemProperties = new HashMap<>();
     long freeMemory = 100 * MB;
     long maxMemory = 512 * MB;
-    Optional<String> procUptime = Optional.of("93784.56 12345.67\n");
+    /** File contents by path, which {@code file} reads. */
+    final Map<String, String> files = new HashMap<>();
+    /** Copied into {@link #files} when {@code pause} ends. A null value removes the file. */
+    final Map<String, String> filesAfterPause = new HashMap<>();
     Set<Thread> liveThreads = new HashSet<>();
     long nanoTime;
     int pauses;
@@ -65,6 +68,7 @@ final class FakeJvm implements JvmSources
         systemProperties.put("user.dir", "/srv/app");
         systemProperties.put("java.io.tmpdir", "/tmp");
         systemProperties.put("file.encoding", "UTF-8");
+        files.put("/proc/uptime", "93784.56 12345.67\n");
     }
 
     private static RuntimeMXBean mockRuntime() {
@@ -189,6 +193,14 @@ final class FakeJvm implements JvmSources
         return info;
     }
 
+    /** Puts cgroup v2 files in {@link #files}: a quota per 100 ms period and the two counters. */
+    void cgroupV2(long quotaMicros, long periods, long throttledPeriods) {
+        files.put("/sys/fs/cgroup/cpu.max", quotaMicros + " 100000\n");
+        files.put("/sys/fs/cgroup/cpu.stat", "usage_usec 2844155\nuser_usec 2668749\nsystem_usec 175406\nnice_usec 0\n"
+                + "nr_periods " + periods + "\nnr_throttled " + throttledPeriods + "\nthrottled_usec 2789108\n"
+                + "nr_bursts 0\nburst_usec 0\n");
+    }
+
     JvmSnapshot snapshot() {
         return snapshot(Duration.ZERO);
     }
@@ -258,8 +270,8 @@ final class FakeJvm implements JvmSources
     }
 
     @Override
-    public Optional<String> procUptime() {
-        return procUptime;
+    public Optional<String> file(String path) {
+        return Optional.ofNullable(files.get(path));
     }
 
     @Override
@@ -270,6 +282,14 @@ final class FakeJvm implements JvmSources
     @Override
     public void pause(Duration duration) throws InterruptedException {
         pauses++;
+        for (Map.Entry<String, String> file : filesAfterPause.entrySet()) {
+            if (file.getValue() == null) {
+                files.remove(file.getKey());
+            }
+            else {
+                files.put(file.getKey(), file.getValue());
+            }
+        }
         if (interruptPauseAfter != null) {
             nanoTime += interruptPauseAfter.toNanos();
             throw new InterruptedException();

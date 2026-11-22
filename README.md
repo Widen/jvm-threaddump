@@ -40,7 +40,7 @@ file descriptors, and the JVM's configuration.
 - **It works where `jstack` cannot.** Anyone who can reach the URL gets the
   dump: no shell, no JDK tools in the image, no attach permission. It also
   works from code, so a health check or an error handler can log a dump.
-- **It diagnoses, not just dumps.** Nine checks read the JVM and list what looks
+- **It diagnoses, not just dumps.** Ten checks read the JVM and list what looks
   abnormal, most serious first, with the thread names, locks, pools, and frames
   to act on. A reader in a hurry starts at the top instead of scrolling through
   hundreds of stacks.
@@ -196,11 +196,13 @@ When no check flags anything, the block is one line:
 the checks look for a fixed set of problems at fixed thresholds. The count
 covers the checks that ran. A check whose data is unavailable skips itself and
 leaves the count: `CPU Saturated` when the JVM reports no CPU load,
-`File Descriptors` when the JVM's operating system bean is not a Unix one, and
-`Hot Threads` when per-thread CPU time is unsupported or disabled, or when no
-window ran. A `jlink` runtime image built without the `jdk.management` module
-reports neither CPU load nor file descriptors, and the dump has no system
-memory, JVM CPU time, or allocation figures there.
+`CPU Throttled` when the container has no CPU limit or the JVM does not run in
+one, `File Descriptors` when the JVM's operating system bean is not a Unix one,
+and `Hot Threads` when per-thread CPU time is unsupported or disabled, or when
+no window ran. Outside a container with a CPU limit, the count is at most
+nine. A `jlink` runtime image built without the `jdk.management` module reports
+neither CPU load nor file descriptors, and the dump has no system memory, JVM
+CPU time, or allocation figures there.
 
 ### The checks
 
@@ -213,6 +215,7 @@ memory, JVM CPU time, or allocation figures there.
 | Metadata Full | no | `Metaspace`, `Compressed Class Space`, the code cache (`Code Cache` or `CodeCache`), or a `CodeHeap` pool holds 90% or more of a defined max. |
 | GC Overhead | uses one | Garbage collection took 25% or more of the window and at least 500 ms, or 10% or more of JVM uptime after the first 5 minutes. |
 | CPU Saturated | uses one | The system CPU load is 0.90 or higher. |
+| CPU Throttled | uses one | The kernel throttled the container in periods that add up to 25% or more of the window and number at least 2, or for 10% or more of JVM uptime after the first 5 minutes. Needs a container with a CPU limit. |
 | File Descriptors | no | The open file descriptors are 90% or more of the limit. |
 | Hot Threads | yes | A thread used 50% or more of one core during the window. Needs per-thread CPU time to be supported and enabled. |
 
@@ -253,6 +256,22 @@ something on every dump teaches people to skip it:
   measure is an average since the JVM started. It runs with or without a window,
   but only once the JVM has run for 5 minutes, because collections at startup
   inflate the average of a younger JVM.
+- **CPU Throttled** looks for throttling: a container with a CPU limit gets a
+  quota of CPU time per period, 100 ms by default, and when its threads use the
+  quota before the period ends, the kernel stops them until the next period.
+  Throttling shows as latency, not as load, so a container can be throttled in
+  half its periods while `CPU Load` stays under 0.90 and `CPU Saturated` stays
+  silent. The kernel counts only the periods in which the container had work to
+  run, so both measures count each throttled period as a whole period of elapsed
+  time and compare the total with the window or with JVM uptime. In the default
+  one-second window, one short burst that is throttled in both of the two
+  periods it spans gives 20% and does not flag; a window of 0.8 seconds or less
+  lets it flag. The counters cover the container's whole life, so a JVM that
+  started after other work in the same container, such as a migration step or a
+  restarted JVM, counts that work's throttling against its own uptime. The
+  counts come from the container's cgroup v1 or v2 files at `/sys/fs/cgroup`. A
+  JVM in a nested cgroup on a plain host, such as a systemd service with
+  `CPUQuota`, gets no `CPU Limit` line and no check.
 - **Hot Threads** lists up to five threads, highest first, with the top three
   frames of each stack. A thread that started during the window counts its
   whole CPU time as the window's.
@@ -299,12 +318,15 @@ read the load. In a container with a CPU limit, the JVM reports use of that
 limit instead of the host's load, so 0.90 means the container is close to being
 throttled.
 
-The dump reads no cgroup files itself. `System Processors`, `System Memory`, and
-`CPU Load` come from the JVM, so they follow the container's limits only when
-the JVM supports the host's cgroup version. Java 17 and later support both
-versions. On Java 8 and 11, cgroup v1 needs 8u302 or 11.0.12, and cgroup v2
-needs 8u372 or 11.0.16. An older JVM reports the host's figures, so
-`CPU Saturated` stays silent while the container is throttled at its limit.
+`System Processors`, `System Memory`, and `CPU Load` come from the JVM, so they
+follow the container's limits only when the JVM supports the host's cgroup
+version. Java 17 and later support both versions. On Java 8 and 11, cgroup v1
+needs 8u302 or 11.0.12, and cgroup v2 needs 8u372 or 11.0.16. An older JVM
+reports the host's figures, so `CPU Saturated` stays silent while the container
+is throttled at its limit.
+
+`CPU Limit` and `CPU Throttled` read the cgroup files themselves, so they work
+on any JVM.
 
 ## The frame filter
 
@@ -457,6 +479,9 @@ public class ThreadDumpRegistration implements ServletContextListener
 - `File Descriptors`: The open count and the limit, from the JVM's Unix
   operating system bean. `Not Available` where the JVM has no such bean, such as
   on Windows.
+- `CPU Limit`: The container's CPU quota divided by its period, then the periods
+  the kernel throttled it in, during the window and since the container started.
+  Absent without a limit.
 - `CPU Load`:
   [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
   [JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)

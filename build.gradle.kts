@@ -55,11 +55,15 @@ subprojects {
         "testImplementation"(platform(catalog.junit.bom))
         "testImplementation"(catalog.junit.jupiter)
         "testImplementation"(catalog.assertj.core)
+        "testImplementation"(catalog.mockito.core)
         "testRuntimeOnly"(catalog.junit.launcher)
     }
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+        // Tests assert formatted output, so pin the locale that formats it.
+        systemProperty("user.language", "en")
+        systemProperty("user.country", "US")
     }
 
     val testSourceSet = the<SourceSetContainer>()["test"]

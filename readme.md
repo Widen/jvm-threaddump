@@ -15,11 +15,10 @@ are not supported.
 
 Direct instantiation:
 
-```text
-import com.widen.util.td.ThreadDumpServlet;
+```java
+import com.widen.util.td.JvmThreadDump;
 
-JvmThreadDump out = new JvmThreadDump();
-String dump = out.generate();
+String dump = JvmThreadDump.create().generate();
 System.out.println(dump);
 ```
 
@@ -40,72 +39,86 @@ Servlet configuration:
 
 ## Customization
 
-Overridable methods for customization:
+Build a customized dump with `JvmThreadDump.builder()`:
 
-- `List<String> getMainArguments()`
-  - The default method returns an empty list.
-- `Map<String, Object> getCustomValues()`
+- `mainArguments(List<String>)`
+  - Prints the program arguments, such as the `args` of `main`. The default is
+    an empty list.
+- `customValues(Map<String, ?>)`
   - Useful if you have environment specific information to aid in debugging the
-    application.
-  - `String.valueOf(...)` is used to generate a text representation of the value
-    Object.
+    application. Each entry prints as one titled line, in the map's iteration
+    order.
+  - `String.valueOf(...)` formats each value on every `generate()` call, so a
+    value that changes between calls shows its current text.
 
-The supplied servlet does not support using a custom `JvmThreadDump` class. We
-recommend that you copy `ThreadDumpServlet.java` into your source tree and
-modify as required.
+```java
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-```text
-public class MyAppThreadDumpServlet extends HttpServlet
+import com.widen.util.td.JvmThreadDump;
+
+Map<String, Object> values = new LinkedHashMap<>();
+values.put("App", "cheese");
+values.put("Environment", "test");
+
+JvmThreadDump dump = JvmThreadDump.builder()
+        .mainArguments(Arrays.asList(args))
+        .customValues(values)
+        .build();
+String out = dump.generate();
+```
+
+A `JvmThreadDump` is immutable and safe to share between threads. The builder
+copies the list and the map, so later changes to them leave the dump unchanged.
+
+To serve a customized dump, extend `ThreadDumpServlet` and pass the built dump
+to its constructor. The servlet regenerates the dump on every request.
+
+```java
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import com.widen.util.td.JvmThreadDump;
+import com.widen.util.td.ThreadDumpServlet;
+
+public class MyAppThreadDumpServlet extends ThreadDumpServlet
 {
-    private final String appName;
-    private final AppEnvironment env;
+    public MyAppThreadDumpServlet(String appName, String env) {
+        super(JvmThreadDump.builder()
+                .mainArguments(Arrays.asList("--app", appName))
+                .customValues(values(appName, env))
+                .build());
+    }
 
-    public ThreadDumpServlet(String appName, AppEnvironment env)
-    {
-        this.appName = appName;
-        this.env = env;
+    private static Map<String, Object> values(String appName, String env) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("App", appName);
+        values.put("Environment", env);
+        return values;
+    }
+}
+```
+
+A container instantiates a servlet from `web.xml` only through a public no-arg
+constructor. Register a servlet that needs constructor arguments in code.
+
+```java
+import javax.servlet.ServletContextEvent;
+import javax.servlet.ServletContextListener;
+
+public class ThreadDumpRegistration implements ServletContextListener
+{
+    @Override
+    public void contextInitialized(ServletContextEvent event) {
+        event.getServletContext()
+                .addServlet("threaddump", new MyAppThreadDumpServlet("cheese", "test"))
+                .addMapping("/td");
     }
 
     @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        Map<String, Object> map = Maps.newHashMap();
-        map.put("App", appName);
-        map.put("Environment", env);
-
-        JvmThreadDump dump = new MyAppThreadDump(map);
-        String out = dump.generate();
-
-        resp.setContentType("text/plain");
-        resp.setContentLength(out.length());
-        resp.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
-        resp.setHeader("Expires", "Thu, 01 Jan 1970 12:00:00 +0000");
-        resp.setHeader("X-Accel-Expires", "off");
-        resp.setHeader("X-Robots-Tag", "noindex, nofollow");
-
-        PrintWriter writer = resp.getWriter();
-        writer.write(out);
-    }
-
-    private static class MyAppThreadDump extends JvmThreadDump
-    {
-        private Map<String, String> map;
-
-        public MyAppThreadDump(Map<String, String> map)
-        {
-            this.map = map;
-        }
-
-        @Override
-        protected List<String> getMainArguments()
-        {
-            return Splitter.on(" ").splitToList(System.getProperty("app.main-args", ""));
-        }
-
-        @Override
-        protected Map<String, Object> getCustomValues()
-        {
-            return map;
-        }
+    public void contextDestroyed(ServletContextEvent event) {
     }
 }
 ```
@@ -117,8 +130,11 @@ public class MyAppThreadDumpServlet extends HttpServlet
   [System](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getSystemCpuLoad--),
   [JVM](https://docs.oracle.com/javase/8/docs/jre/api/management/extension/com/sun/management/OperatingSystemMXBean.html#getProcessCpuLoad--)
 - `System Uptime`: Linux only; parsed from file `/proc/uptime`
-- `Main Arguments`: Will be empty unless you override and implement
-  `getMainArguments()`.
+- `Main Arguments`: Empty unless the builder sets `mainArguments`.
+- `JVM System Props`: The `-D` values print as `****` when the key contains
+  `password`, `pass`, `pwd`, `secret`, `token`, `credential`, or `key`, when the
+  value contains one of those words followed by `=`, or when the value holds a
+  URL password (`://user:password@` before the next `/`).
 
 ## Example Output
 
@@ -140,7 +156,7 @@ public class MyAppThreadDumpServlet extends HttpServlet
       Operating System: Mac OS X (10.14.2)
      System Processors: 12 x86_64
          System Memory: 2,017 MB available; 32,768 MB total
-              CPU Load: 0.0000 system; 0.0000 jvm
+              CPU Load: 0.0000 system; 0.0000 jvm (0.0 to 1.0)
          System Uptime: Not Available
       System Idle Time: Not Available
             JVM Uptime: 0 days, 0:00:00
@@ -150,11 +166,11 @@ public class MyAppThreadDumpServlet extends HttpServlet
       JVM Maximum Heap: 245 MB
        JVM Memory Args: -Xmx256m
 
-                Memory: used/max
+                Memory: used/committed, used/max
                   Heap: 5%/5%         init=256 MB      used=12 MB       commit=245 MB      max=245 MB
               Non Heap: 93%/0%        init=2 MB        used=9 MB        commit=10 MB       max=-1 bytes
 
-             Collector: used/max
+             Collector: used/committed, used/max
          PS Eden Space: 20%/20%       init=64 MB       used=12 MB       commit=64 MB       max=64 MB
      PS Survivor Space: 0%/0%         init=10 MB       used=0 bytes     commit=10 MB       max=10 MB
             PS Old Gen: 0%/0%         init=171 MB      used=0 bytes     commit=171 MB      max=171 MB
@@ -162,8 +178,8 @@ public class MyAppThreadDumpServlet extends HttpServlet
 Compressed Class Space: 81%/0%        init=0 bytes     used=827 KB      commit=1 MB        max=1,024 MB
              Metaspace: 96%/0%        init=0 bytes     used=6 MB        commit=7 MB        max=-1 bytes
 
-        GC PS Scavenge: spent 0:00:00 doing 0 collections
-       GC PS MarkSweep: spent 0:00:00 doing 0 collections
+        GC PS Scavenge: spent 0:00:00.000 doing 0 collections
+       GC PS MarkSweep: spent 0:00:00.000 doing 0 collections
 
     Deadlocked Threads: None
           Thread Count: 5
@@ -174,13 +190,12 @@ Compressed Class Space: 81%/0%        init=0 bytes     used=827 KB      commit=1
     java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:165)
     java.lang.ref.Finalizer$FinalizerThread.run(Finalizer.java:216)
 
-"main" priority=5 id=0x1 group=main cpu=405ms block_cnt=0 wait_cnt=0 RUNNABLE
-    java.lang.Thread.dumpThreads(Thread.java)
-    java.lang.Thread.getAllStackTraces(Thread.java:1610)
-    com.widen.util.td.ThreadDumpProducer.getThreads(ThreadDumpProducer.java:24)
-    com.widen.util.td.JvmThreadDump.doThreads(JvmThreadDump.java:217)
-    com.widen.util.td.JvmThreadDump.generate(JvmThreadDump.java:58)
-    com.widen.util.td.TestDump.dumpToStdOut(TestDump.java:14)
+"Test worker" priority=5 id=0x1 group=main cpu=405ms block_cnt=0 wait_cnt=0 RUNNABLE
+    sun.management.ThreadImpl.dumpThreads0(Native Method)
+    sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:454)
+    com.widen.util.td.ThreadSection.lines(ThreadSection.java:38)
+    com.widen.util.td.JvmThreadDump.generate(JvmThreadDump.java:53)
+    com.widen.util.td.TestDump.printsEverySectionOfTheRunningJvm(TestDump.java:12)
     sun.reflect.NativeMethodAccessorImpl.invoke0(NativeMethodAccessorImpl.java)
     sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
     sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)

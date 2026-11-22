@@ -16,13 +16,13 @@ public class TestDeadlock
     @Test
     void reportsDeadlockedThreadsAndClearsThemAfterward() throws Exception {
         try (DeadlockFixture deadlock = DeadlockFixture.start()) {
-            String dump = new JvmThreadDumpImpl().generate();
+            String dump = JvmThreadDump.create().generate();
             String[] fixtureIds = Arrays.stream(deadlock.threadIds())
                     .mapToObj(id -> "0x" + Long.toHexString(id))
                     .toArray(String[]::new);
             assertThat(deadlockedThreadIds(dump)).contains(fixtureIds);
         }
-        assertThat(new JvmThreadDumpImpl().generate())
+        assertThat(JvmThreadDump.create().generate())
                 .contains("Deadlocked Threads: None");
     }
 

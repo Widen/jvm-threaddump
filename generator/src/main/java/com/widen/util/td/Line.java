@@ -4,11 +4,19 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-public interface Line
+interface Line
 {
     int PADDING = 22;
 
     String toString();
+
+    static String render(List<? extends Line> lines) {
+        StringBuilder sb = new StringBuilder();
+        for (Line line : lines) {
+            sb.append(line.toString());
+        }
+        return sb.toString();
+    }
 
     class BlankLine implements Line
     {
@@ -20,7 +28,7 @@ public interface Line
 
     class SimpleLine implements Line
     {
-        public SimpleLine(String value) {
+        SimpleLine(String value) {
             this.value = value;
         }
 
@@ -37,7 +45,7 @@ public interface Line
         private String title;
         private String value;
 
-        public TitledLine(String title, String value) {
+        TitledLine(String title, String value) {
             this.title = title;
             this.value = value;
         }
@@ -53,7 +61,7 @@ public interface Line
         private String title;
         private List<String> values;
 
-        public MultiLine(String title, Collection<String> values) {
+        MultiLine(String title, Collection<String> values) {
             this.title = title;
             this.values = new ArrayList<>(values);
         }

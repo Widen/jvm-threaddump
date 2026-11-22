@@ -23,8 +23,6 @@ import java.util.Locale;
 class BytesUtils
 {
 
-    private static final NumberFormat format = NumberFormat.getNumberInstance(Locale.US);
-
     /**
      * The number of bytes in a kilobyte.
      */
@@ -45,6 +43,8 @@ class BytesUtils
     private static final BigInteger ONE_MB_BI = ONE_KB_BI.multiply(ONE_KB_BI);
 
     static String byteCountToDisplaySize(long input) {
+        // NumberFormat is not thread-safe, so each call gets its own instance.
+        NumberFormat format = NumberFormat.getNumberInstance(Locale.US);
         BigInteger size = BigInteger.valueOf(input);
         String displaySize;
 

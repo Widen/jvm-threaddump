@@ -98,7 +98,7 @@ import com.widen.util.td.JvmThreadDump;
 String dump = JvmThreadDump.create().generate();
 ```
 
-Two request parameters change one servlet dump:
+Three request parameters change one servlet dump:
 
 - `/td?window=5` samples for five seconds. The window is a whole number of
   seconds from 0 to 30, and `window=0` returns at once without sampling. Any
@@ -106,6 +106,12 @@ Two request parameters change one servlet dump:
   `window must be a whole number of seconds from 0 to 30`.
 - `/td?frames=all` prints every stack frame. Any other value gets status 400
   with the body `frames must be all`.
+- `/td?group=same-stack`, `neighbors`, or `none` sets how the thread list prints
+  threads that share a stack: under the first thread with that stack, only
+  between neighbors in name order, or once per thread (see
+  [Repeated stacks](#repeated-stacks)). Any other value, including a different
+  case, gets status 400 with the body
+  `group must be same-stack, neighbors, or none`.
 
 ## Securing `/td`
 
@@ -408,7 +414,8 @@ that has it. Each header keeps its own state and finding marker, and
 "OkHttp ConnectionPool connection closer" daemon ...
 ```
 
-`Builder.threadGrouping(ThreadGrouping)` chooses one of three layouts:
+`Builder.threadGrouping(ThreadGrouping)` and `/td?group=...` choose one of three
+layouts:
 
 - `SAME_STACK`, the default, prints every thread whose stack equals another's
   under the first of them in name order. The group sits where that first thread

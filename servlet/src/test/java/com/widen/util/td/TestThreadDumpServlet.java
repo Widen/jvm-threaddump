@@ -15,6 +15,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -69,25 +70,25 @@ public class TestThreadDumpServlet
     void buildsADumpWithTheRequestedWindowAndFrames() {
         JvmThreadDump dump = zeroWindowDump();
 
-        JvmThreadDump windowOnly = ThreadDumpServlet.forRequest(dump, "5", null);
+        JvmThreadDump windowOnly = ThreadDumpServlet.forRequest(dump, "5", null, null);
         assertThat(windowOnly.sampleWindow()).isEqualTo(Duration.ofSeconds(5));
         assertThat(windowOnly.allFrames()).isFalse();
 
-        JvmThreadDump framesOnly = ThreadDumpServlet.forRequest(dump, null, "all");
+        JvmThreadDump framesOnly = ThreadDumpServlet.forRequest(dump, null, "all", null);
         assertThat(framesOnly.allFrames()).isTrue();
         assertThat(framesOnly.sampleWindow()).isEqualTo(Duration.ZERO);
 
-        JvmThreadDump both = ThreadDumpServlet.forRequest(dump, "0", "all");
+        JvmThreadDump both = ThreadDumpServlet.forRequest(dump, "0", "all", null);
         assertThat(both.sampleWindow()).isEqualTo(Duration.ZERO);
         assertThat(both.allFrames()).isTrue();
 
-        assertThat(ThreadDumpServlet.forRequest(dump, null, null)).isSameAs(dump);
+        assertThat(ThreadDumpServlet.forRequest(dump, null, null, null)).isSameAs(dump);
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"-1", "31", "1.5", "abc", "", "+5", "99999999999"})
     void rejectsABadWindow(String window) {
-        assertThatThrownBy(() -> ThreadDumpServlet.forRequest(zeroWindowDump(), window, null))
+        assertThatThrownBy(() -> ThreadDumpServlet.forRequest(zeroWindowDump(), window, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("window must be a whole number of seconds from 0 to 30");
     }
@@ -95,16 +96,32 @@ public class TestThreadDumpServlet
     @ParameterizedTest
     @ValueSource(strings = {"0", "30", "07"})
     void acceptsWindowsFromZeroToThirty(String window) {
-        JvmThreadDump dump = ThreadDumpServlet.forRequest(zeroWindowDump(), window, null);
+        JvmThreadDump dump = ThreadDumpServlet.forRequest(zeroWindowDump(), window, null, null);
 
         assertThat(dump.sampleWindow()).isEqualTo(Duration.ofSeconds(Long.parseLong(window)));
     }
 
     @Test
     void rejectsFramesOtherThanAll() {
-        assertThatThrownBy(() -> ThreadDumpServlet.forRequest(zeroWindowDump(), null, "some"))
+        assertThatThrownBy(() -> ThreadDumpServlet.forRequest(zeroWindowDump(), null, "some", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("frames must be all");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"same-stack,SAME_STACK,NONE", "neighbors,NEIGHBORS,NONE", "none,NONE,SAME_STACK"})
+    void buildsADumpWithTheRequestedGrouping(String group, ThreadGrouping expected, ThreadGrouping built) {
+        JvmThreadDump dump = JvmThreadDump.builder().sampleWindow(Duration.ZERO).threadGrouping(built).build();
+
+        assertThat(ThreadDumpServlet.forRequest(dump, null, null, group).threadGrouping()).isEqualTo(expected);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"NONE", "same_stack", ""})
+    void rejectsAnUnknownGrouping(String group) {
+        assertThatThrownBy(() -> ThreadDumpServlet.forRequest(zeroWindowDump(), null, null, group))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("group must be same-stack, neighbors, or none");
     }
 
     @Test
@@ -114,17 +131,19 @@ public class TestThreadDumpServlet
         assertThat(get(servlet, "0", "all")).contains("not sampled");
     }
 
-    @Test
-    void answers400WithTheMessageForABadParameter() throws Exception {
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "31||window must be a whole number of seconds from 0 to 30",
+            "|all|group must be same-stack, neighbors, or none"})
+    void answers400WithTheMessageForABadParameter(String window, String group, String message) throws Exception {
         HttpServletResponse response = mock(HttpServletResponse.class);
         ByteArrayOutputStream written = respondInto(response);
 
-        new ThreadDumpServlet(zeroWindowDump()).doGet(requestWith("31", null), response);
+        new ThreadDumpServlet(zeroWindowDump()).doGet(requestWith(window, null, group), response);
 
         verify(response).setStatus(400);
         verify(response).setContentType("text/plain; charset=UTF-8");
-        assertThat(new String(written.toByteArray(), StandardCharsets.UTF_8))
-                .isEqualTo("window must be a whole number of seconds from 0 to 30");
+        assertThat(new String(written.toByteArray(), StandardCharsets.UTF_8)).isEqualTo(message);
         verify(response).setContentLength(written.size());
         verify(response).setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
         verify(response).setHeader("Expires", "Thu, 01 Jan 1970 12:00:00 +0000");
@@ -141,7 +160,7 @@ public class TestThreadDumpServlet
                 JvmThreadDump.builder().jvmSources(failing).sampleWindow(Duration.ZERO).build());
         HttpServletResponse response = mock(HttpServletResponse.class);
 
-        assertThatThrownBy(() -> servlet.doGet(requestWith(null, null), response))
+        assertThatThrownBy(() -> servlet.doGet(requestWith(null, null, null), response))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("internal defect");
         verify(response, never()).setStatus(400);
@@ -151,10 +170,11 @@ public class TestThreadDumpServlet
         return JvmThreadDump.builder().sampleWindow(Duration.ZERO).build();
     }
 
-    private static HttpServletRequest requestWith(String window, String frames) {
+    private static HttpServletRequest requestWith(String window, String frames, String group) {
         HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getParameter("window")).thenReturn(window);
         when(request.getParameter("frames")).thenReturn(frames);
+        when(request.getParameter("group")).thenReturn(group);
         return request;
     }
 
@@ -166,7 +186,7 @@ public class TestThreadDumpServlet
         HttpServletResponse response = mock(HttpServletResponse.class);
         ByteArrayOutputStream written = respondInto(response);
 
-        servlet.doGet(requestWith(window, frames), response);
+        servlet.doGet(requestWith(window, frames, null), response);
 
         return new String(written.toByteArray(), StandardCharsets.UTF_8);
     }

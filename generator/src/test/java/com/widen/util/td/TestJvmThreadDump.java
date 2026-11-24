@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,7 @@ public class TestJvmThreadDump
         lines.addAll(new MemorySection(jvm, snapshot, findings).lines());
         lines.addAll(new GcSection(snapshot, findings).lines());
         lines.addAll(new DeadlockSection(snapshot).lines());
-        lines.addAll(new ThreadSection(snapshot, findings, false).lines());
+        lines.addAll(new ThreadSection(snapshot, findings, false, ThreadGrouping.SAME_STACK).lines());
 
         assertThat(JvmThreadDump.builder().jvmSources(jvm).sampleWindow(Duration.ZERO).build().generate())
                 .isEqualTo(Line.render(lines));
@@ -186,6 +187,24 @@ public class TestJvmThreadDump
                 .contains("java.lang.reflect.Method.invoke")
                 .doesNotContain("frame hidden")
                 .doesNotContain("frames hidden");
+    }
+
+    @Test
+    void groupsBySameStackUnlessToldOtherwise() {
+        FakeJvm jvm = new FakeJvm();
+        for (int id = 1; id <= 2; id++) {
+            jvm.addThread("worker-" + id, id, Thread.State.RUNNABLE, FakeThreads.frame("com.example.Loop", "spin"));
+        }
+        JvmThreadDump.Builder builder = JvmThreadDump.builder().jvmSources(jvm).sampleWindow(Duration.ZERO);
+        String frame = Pattern.quote("    com.example.Loop.spin(Loop.java:1)");
+
+        assertThat(builder.build().generate().split(frame, -1)).hasSize(2);
+        JvmThreadDump ungrouped = builder.threadGrouping(ThreadGrouping.NONE).build();
+        assertThat(ungrouped.generate().split(frame, -1)).hasSize(3);
+        assertThat(ungrouped.toBuilder().build().threadGrouping()).isEqualTo(ThreadGrouping.NONE);
+        assertThatThrownBy(() -> JvmThreadDump.builder().threadGrouping(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("threadGrouping");
     }
 
     @Test

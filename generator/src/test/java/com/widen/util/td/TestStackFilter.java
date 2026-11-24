@@ -97,6 +97,138 @@ public class TestStackFilter
     }
 
     @Test
+    void dropsACallThatRepeatsTheOneAbove() {
+        StackTraceElement[] stack = {
+                new StackTraceElement("java.lang.Object", "wait", "Object.java", 502),
+                new StackTraceElement("java.lang.Object", "wait", "Object.java", 328),
+                FakeThreads.frame("com.example.Main", "main")};
+
+        assertThat(StackFilter.kept(stack)).containsExactly(stack[0], stack[2]);
+    }
+
+    @Test
+    void collapsesARunToItsEnds() {
+        StackTraceElement[] stack = {
+                FakeThreads.frame("sun.nio.ch.EPollArrayWrapper", "epollWait"),
+                FakeThreads.frame("sun.nio.ch.EPollArrayWrapper", "poll"),
+                FakeThreads.frame("sun.nio.ch.SelectorImpl", "select"),
+                FakeThreads.frame("io.netty.channel.nio.SelectedSelectionKeySetSelector", "select"),
+                FakeThreads.frame("io.netty.channel.nio.NioEventLoop", "select"),
+                FakeThreads.frame("io.netty.channel.nio.NioEventLoop", "run"),
+                FakeThreads.frame("io.netty.util.concurrent.SingleThreadEventExecutor$4", "run"),
+                FakeThreads.frame("io.netty.util.internal.ThreadExecutorMap$2", "run"),
+                FakeThreads.frame("java.lang.Thread", "run")};
+
+        assertThat(StackFilter.kept(stack)).containsExactly(stack[0], stack[2], stack[3], stack[5]);
+    }
+
+    @Test
+    void aHiddenFrameSplitsNeitherARunNorARepeat() {
+        StackTraceElement[] stack = {
+                FakeThreads.frame("org.apache.hc.client5.A", "x"),
+                FakeThreads.frame("org.apache.hc.client5.B", "y"),
+                FakeThreads.frame("org.apache.hc.client5.B$$Lambda$9", "proceed"),
+                FakeThreads.frame("org.apache.hc.client5.B", "y"),
+                FakeThreads.frame("org.apache.hc.client5.C", "z"),
+                FakeThreads.frame("com.example.App", "run")};
+
+        assertThat(StackFilter.kept(stack)).containsExactly(stack[0], stack[4], stack[5]);
+    }
+
+    @Test
+    void keepsBothFramesOfATwoFrameRun() {
+        StackTraceElement[] stack = {
+                FakeThreads.frame("com.amazonaws.A", "a"),
+                FakeThreads.frame("com.amazonaws.B", "b"),
+                FakeThreads.frame("com.example.App", "run")};
+
+        assertThat(StackFilter.kept(stack)).containsExactly(stack);
+    }
+
+    @Test
+    void trimsAnSqsReceive() {
+        StackTraceElement[] stack = sqsReceiveStack();
+
+        assertThat(StackFilter.kept(stack)).extracting(ThreadSection::formatFrame).containsExactly(
+                "    java.net.SocketInputStream.socketRead0(SocketInputStream.java)",
+                "    java.net.SocketInputStream.read(SocketInputStream.java:171)",
+                "    sun.security.ssl.SSLSocketInputRecord.read(SSLSocketInputRecord.java:476)",
+                "    sun.security.ssl.SSLSocketImpl$AppInputStream.read(SSLSocketImpl.java:980)",
+                "    org.apache.hc.core5.http.impl.io.SessionInputBufferImpl.fillBuffer(SessionInputBufferImpl.java:149)",
+                "    org.apache.hc.client5.http.classic.HttpClient.executeOpen(HttpClient.java:183)",
+                "    software.amazon.awssdk.http.apache5.internal.impl.Apache5SdkHttpClient.executeOpen(Apache5SdkHttpClient.java:70)",
+                "    software.amazon.awssdk.services.sqs.DefaultSqsClient.receiveMessage(DefaultSqsClient.java:1996)",
+                "    com.widen.mica.sqs.impl.SqsConsumerBackgroundServiceFactory$Service.runOnce(SqsConsumerBackgroundServiceFactory.java:259)",
+                "    com.widen.mica.sqs.impl.SqsConsumerBackgroundServiceFactory$Service.run(SqsConsumerBackgroundServiceFactory.java:211)",
+                "    com.widen.mica.background.services.BackgroundServicesImpl$BackgroundServiceThread.run(BackgroundServicesImpl.java:148)");
+    }
+
+    @Test
+    void trimsAnIdleJava17PoolThreadToThreeFrames() {
+        StackTraceElement[] stack = {
+                FakeThreads.frame("jdk.internal.misc.Unsafe", "park"),
+                FakeThreads.frame("java.util.concurrent.locks.LockSupport", "park"),
+                FakeThreads.frame("java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode", "block"),
+                FakeThreads.frame("java.util.concurrent.ForkJoinPool", "unmanagedBlock"),
+                FakeThreads.frame("java.util.concurrent.ForkJoinPool", "managedBlock"),
+                FakeThreads.frame("java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject", "await"),
+                FakeThreads.frame("java.util.concurrent.LinkedBlockingQueue", "take"),
+                FakeThreads.frame("java.util.concurrent.ThreadPoolExecutor", "getTask"),
+                FakeThreads.frame("java.util.concurrent.ThreadPoolExecutor", "runWorker"),
+                FakeThreads.frame("java.util.concurrent.ThreadPoolExecutor$Worker", "run"),
+                FakeThreads.frame("java.lang.Thread", "run")};
+
+        assertThat(StackFilter.kept(stack)).containsExactly(stack[0], stack[6], stack[7]);
+    }
+
+    @Test
+    void keepsTheFrameStackPileUpKeysOn() {
+        StackTraceElement lease = FakeThreads.frame("org.apache.hc.core5.pool.StrictConnPool", "lease");
+        StackTraceElement[] poolWait = {
+                FakeThreads.frame("jdk.internal.misc.Unsafe", "park"),
+                FakeThreads.frame("java.util.concurrent.locks.LockSupport", "parkNanos"),
+                FakeThreads.frame("java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject", "awaitNanos"),
+                lease,
+                FakeThreads.frame("org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager", "lease"),
+                FakeThreads.frame("com.example.App", "call")};
+
+        assertThat(StackFilter.firstKeptOutsideJdk(sqsReceiveStack()).getMethodName()).isEqualTo("fillBuffer");
+        assertThat(StackFilter.firstKeptOutsideJdk(poolWait)).isSameAs(lease);
+    }
+
+    /**
+     * The SQS consumer thread of the spec in short form: one or more frames for each class group of the original.
+     */
+    private static StackTraceElement[] sqsReceiveStack() {
+        return new StackTraceElement[] {
+                new StackTraceElement("java.net.SocketInputStream", "socketRead0", "SocketInputStream.java", -1),
+                new StackTraceElement("java.net.SocketInputStream", "socketRead", "SocketInputStream.java", 116),
+                new StackTraceElement("java.net.SocketInputStream", "read", "SocketInputStream.java", 171),
+                new StackTraceElement("java.net.SocketInputStream", "read", "SocketInputStream.java", 141),
+                new StackTraceElement("sun.security.ssl.SSLSocketInputRecord", "read", "SSLSocketInputRecord.java", 476),
+                new StackTraceElement("sun.security.ssl.SSLSocketInputRecord", "readHeader", "SSLSocketInputRecord.java", 470),
+                new StackTraceElement("sun.security.ssl.SSLSocketImpl", "readApplicationRecord", "SSLSocketImpl.java", 1500),
+                new StackTraceElement("sun.security.ssl.SSLSocketImpl$AppInputStream", "read", "SSLSocketImpl.java", 980),
+                new StackTraceElement("org.apache.hc.core5.http.impl.io.SessionInputBufferImpl", "fillBuffer", "SessionInputBufferImpl.java", 149),
+                new StackTraceElement("org.apache.hc.core5.http.impl.io.SessionInputBufferImpl", "readLine", "SessionInputBufferImpl.java", 280),
+                new StackTraceElement("org.apache.hc.core5.http.impl.io.HttpRequestExecutor", "execute", "HttpRequestExecutor.java", 136),
+                new StackTraceElement("org.apache.hc.client5.http.impl.classic.ExecChainElement", "execute", "ExecChainElement.java", 51),
+                new StackTraceElement("org.apache.hc.client5.http.impl.classic.ExecChainElement$$Lambda$9/0x0000000800c03000", "proceed", null, -1),
+                new StackTraceElement("org.apache.hc.client5.http.impl.classic.ConnectExec", "execute", "ConnectExec.java", 120),
+                new StackTraceElement("org.apache.hc.client5.http.impl.classic.InternalHttpClient", "doExecute", "InternalHttpClient.java", 174),
+                new StackTraceElement("org.apache.hc.client5.http.classic.HttpClient", "executeOpen", "HttpClient.java", 183),
+                new StackTraceElement("software.amazon.awssdk.http.apache5.internal.impl.Apache5SdkHttpClient", "executeOpen", "Apache5SdkHttpClient.java", 70),
+                new StackTraceElement("software.amazon.awssdk.http.apache5.Apache5HttpClient", "access$700", "Apache5HttpClient.java", 120),
+                new StackTraceElement("software.amazon.awssdk.http.apache5.Apache5HttpClient", "execute", "Apache5HttpClient.java", 300),
+                new StackTraceElement("software.amazon.awssdk.core.internal.http.pipeline.stages.RetryableStage", "execute", "RetryableStage.java", 50),
+                new StackTraceElement("software.amazon.awssdk.core.internal.handler.BaseSyncClientHandler", "execute", "BaseSyncClientHandler.java", 120),
+                new StackTraceElement("software.amazon.awssdk.services.sqs.DefaultSqsClient", "receiveMessage", "DefaultSqsClient.java", 1996),
+                new StackTraceElement("com.widen.mica.sqs.impl.SqsConsumerBackgroundServiceFactory$Service", "runOnce", "SqsConsumerBackgroundServiceFactory.java", 259),
+                new StackTraceElement("com.widen.mica.sqs.impl.SqsConsumerBackgroundServiceFactory$Service", "run", "SqsConsumerBackgroundServiceFactory.java", 211),
+                new StackTraceElement("com.widen.mica.background.services.BackgroundServicesImpl$BackgroundServiceThread", "run", "BackgroundServicesImpl.java", 148)};
+    }
+
+    @Test
     void findsTheFirstKeptFrameOutsideTheJdk() {
         StackTraceElement receive = FakeThreads.frame("org.postgresql.core.PGStream", "receive");
         StackTraceElement[] stack = {

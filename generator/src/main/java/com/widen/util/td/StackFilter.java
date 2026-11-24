@@ -45,6 +45,12 @@ final class StackFilter
 
     private static final Pattern ACCESSOR = Pattern.compile("access\\$\\d+");
 
+    /** The client and I/O libraries whose runs of frames collapse to their innermost and outermost frame. */
+    private static final List<String> COLLAPSED_PREFIXES = Arrays.asList(
+            "software.amazon.awssdk.", "com.amazonaws.",
+            "org.apache.hc.", "org.apache.http.", "okhttp3.", "okio.", "io.netty.",
+            "sun.nio.ch.", "sun.security.ssl.", "java.net.");
+
     private StackFilter() {
     }
 
@@ -62,16 +68,42 @@ final class StackFilter
     }
 
     /**
-     * Returns the top frame, which is always kept, followed by every other frame that is not hidden.
+     * Returns the top frame, which is always kept, followed by every other frame that is not hidden and does not
+     * repeat the class and method of the frame kept before it. Of each run of two or more of those frames from one
+     * collapsed library, only the first and the last are kept.
      */
     static List<StackTraceElement> kept(StackTraceElement[] stack) {
-        List<StackTraceElement> kept = new ArrayList<>();
+        List<StackTraceElement> calls = new ArrayList<>();
         for (int i = 0; i < stack.length; i++) {
-            if (i == 0 || !hidden(stack[i])) {
-                kept.add(stack[i]);
+            if (i == 0 || !hidden(stack[i]) && !sameCall(stack[i], calls.get(calls.size() - 1))) {
+                calls.add(stack[i]);
+            }
+        }
+
+        List<StackTraceElement> kept = new ArrayList<>();
+        for (int i = 0; i < calls.size(); i++) {
+            String library = collapsedPrefix(calls.get(i));
+            boolean insideRun = library != null && i > 0 && i < calls.size() - 1
+                    && library.equals(collapsedPrefix(calls.get(i - 1)))
+                    && library.equals(collapsedPrefix(calls.get(i + 1)));
+            if (!insideRun) {
+                kept.add(calls.get(i));
             }
         }
         return kept;
+    }
+
+    private static boolean sameCall(StackTraceElement frame, StackTraceElement other) {
+        return frame.getClassName().equals(other.getClassName()) && frame.getMethodName().equals(other.getMethodName());
+    }
+
+    private static String collapsedPrefix(StackTraceElement frame) {
+        for (String prefix : COLLAPSED_PREFIXES) {
+            if (frame.getClassName().startsWith(prefix)) {
+                return prefix;
+            }
+        }
+        return null;
     }
 
     /**

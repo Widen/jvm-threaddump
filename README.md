@@ -331,18 +331,47 @@ on any JVM.
 ## The frame filter
 
 Most frames in a stack are plumbing. The thread list hides them, so the
-application's own calls stand out. A frame is hidden when its class matches one
-of these rules:
+application's own calls stand out. A frame is hidden when its class, or its
+class and method, matches one of these rules:
 
-| Kind | Classes |
+| Kind | Frames |
 | --- | --- |
 | Reflection and method handles | `sun.reflect.`, `jdk.internal.reflect.`, `java.lang.reflect.`, `java.lang.invoke.` |
 | Generated proxies | a class with no package whose name starts with `$` (a Tapestry service proxy or its advice invocation), `com.sun.proxy.`, `jdk.proxy`, and any class whose name contains `$$` (CGLIB, Javassist, Hibernate proxies, and lambda classes) |
 | Tapestry | everything under `org.apache.tapestry5.` |
 | Server dispatch | `org.eclipse.jetty.`, `org.glassfish.jersey.`, `org.glassfish.hk2.`, `org.jvnet.hk2.`, `org.apache.catalina.`, `org.apache.coyote.`, `org.apache.tomcat.util.`, `org.apache.tomcat.websocket.`, `javax.servlet.`, `jakarta.servlet.` |
+| Lock plumbing | every method of `java.util.concurrent.locks.LockSupport` and of the classes starting with `java.util.concurrent.locks.AbstractQueuedSynchronizer` or `java.util.concurrent.locks.AbstractQueuedLongSynchronizer` |
+| Executor plumbing | `ThreadPoolExecutor.runWorker`, `ThreadPoolExecutor$Worker.run`, `FutureTask.run`, `FutureTask.runAndReset`, `Executors$RunnableAdapter.call`, `ScheduledThreadPoolExecutor$ScheduledFutureTask.run`, `ForkJoinWorkerThread.run`, `ForkJoinPool.runWorker`, `ForkJoinPool.managedBlock`, and `ForkJoinPool.unmanagedBlock`, all in `java.util.concurrent.`, and `java.lang.Thread.run` and `java.lang.Thread.runWith` |
+| Netty thread wrappers | classes starting with `io.netty.util.concurrent.SingleThreadEventExecutor$`, `io.netty.util.internal.ThreadExecutorMap$`, or `io.netty.util.concurrent.FastThreadLocalRunnable` |
+| Accessors | a method named `access$` followed by digits, which javac generates so an inner class can reach a private member |
 
-The top frame of a stack always prints, whatever its class, because it says what
-the thread is doing now. One line after the last frame gives the number of
+A frame whose class and method equal those of the frame kept above it is also
+hidden. This drops overload and bridge pairs, such as two
+`SocketInputStream.read` frames in a row, and folds deep recursion into one
+frame.
+
+A run of two or more frames from one client or I/O library keeps only its first
+and last frame. The first, the innermost, shows what the library is doing, such
+as a connection pool lease or a retry backoff. The last shows how the caller
+entered the library. Runs are judged after the rules above, so a hidden frame
+inside a run does not split it. Frames from two different libraries form two
+runs, even when they sit next to each other. The libraries are:
+
+| Library | Prefix |
+| --- | --- |
+| AWS SDK v2 | `software.amazon.awssdk.` |
+| AWS SDK v1 | `com.amazonaws.` |
+| Apache HttpClient 5 | `org.apache.hc.` |
+| Apache HttpClient 4 | `org.apache.http.` |
+| OkHttp | `okhttp3.` |
+| Okio | `okio.` |
+| Netty | `io.netty.` |
+| JDK NIO | `sun.nio.ch.` |
+| JDK TLS | `sun.security.ssl.` |
+| JDK networking | `java.net.` |
+
+The top frame of a stack always prints, whatever the rules say, because it says
+what the thread is doing now. One line after the last frame gives the number of
 hidden frames, and the dump omits the line when no frame is hidden:
 
 ```text
@@ -351,8 +380,7 @@ hidden frames, and the dump omits the line when no frame is hidden:
     org.postgresql.jdbc.PgPreparedStatement.executeQuery(PgPreparedStatement.java:134)
     com.widen.assets.AssetDao.find(AssetDao.java:88)
     com.widen.api.AssetResource.get(AssetResource.java:57)
-    java.lang.Thread.run(Thread.java:840)
-    ... 47 frames hidden
+    ... 48 frames hidden
 ```
 
 - `Builder.allFrames(true)` and `/td?frames=all` print every frame in the thread

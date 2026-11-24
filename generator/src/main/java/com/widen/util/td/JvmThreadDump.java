@@ -145,8 +145,9 @@ public final class JvmThreadDump
         }
 
         /**
-         * Sets whether every stack frame prints. By default the dump hides reflection, generated proxy, Tapestry, and
-         * servlet container frames and prints how many it hid; the top frame of each stack always prints.
+         * Sets whether every stack frame prints. By default the dump hides reflection, generated proxy, Tapestry,
+         * servlet container, executor plumbing, and accessor frames, calls that repeat the frame above, and the middle
+         * of client library calls, and prints how many it hid; the top frame of each stack always prints.
          */
         public Builder allFrames(boolean allFrames) {
             this.allFrames = allFrames;

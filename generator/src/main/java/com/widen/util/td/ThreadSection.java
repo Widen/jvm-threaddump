@@ -65,19 +65,21 @@ final class ThreadSection
     private List<List<ThreadSnapshot>> groups() {
         List<List<ThreadSnapshot>> groups = new ArrayList<>();
         Map<List<StackTraceElement>, List<ThreadSnapshot>> groupsByStack = new HashMap<>();
+        List<StackTraceElement> lastGroupStack = null;
         for (ThreadSnapshot thread : snapshot.threads) {
             List<StackTraceElement> stack = Arrays.asList(thread.stack());
+            boolean bySameStack = !stack.isEmpty() && grouping == ThreadGrouping.SAME_STACK;
             List<ThreadSnapshot> group = null;
-            if (!stack.isEmpty() && grouping == ThreadGrouping.SAME_STACK) {
+            if (bySameStack) {
                 group = groupsByStack.get(stack);
-            } else if (!stack.isEmpty() && grouping == ThreadGrouping.NEIGHBORS && !groups.isEmpty()) {
-                List<ThreadSnapshot> last = groups.get(groups.size() - 1);
-                group = stack.equals(Arrays.asList(last.get(0).stack())) ? last : null;
+            } else if (!stack.isEmpty() && grouping == ThreadGrouping.NEIGHBORS && stack.equals(lastGroupStack)) {
+                group = groups.get(groups.size() - 1);
             }
             if (group == null) {
                 group = new ArrayList<>();
                 groups.add(group);
-                if (!stack.isEmpty() && grouping == ThreadGrouping.SAME_STACK) {
+                lastGroupStack = stack;
+                if (bySameStack) {
                     groupsByStack.put(stack, group);
                 }
             }

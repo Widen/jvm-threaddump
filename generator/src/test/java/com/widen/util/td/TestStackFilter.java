@@ -145,6 +145,9 @@ public class TestStackFilter
                 FakeThreads.frame("com.example.App", "run")};
 
         assertThat(StackFilter.kept(stack)).containsExactly(stack[0], stack[1], stack[4]);
+
+        StackTraceElement[] wholeStack = {stack[1], stack[2], stack[3]};
+        assertThat(StackFilter.kept(wholeStack)).containsExactly(stack[1]);
     }
 
     @Test

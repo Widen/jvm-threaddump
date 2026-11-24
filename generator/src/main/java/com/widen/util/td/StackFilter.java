@@ -70,7 +70,7 @@ final class StackFilter
     /**
      * Returns the top frame, which is always kept, followed by every other frame that is not hidden and does not
      * repeat the class and method of the frame kept before it. Of each run of two or more of those frames from one
-     * collapsed library, only the first and the last are kept.
+     * collapsed library, only the first and the last are kept, or only the first when both are the same call.
      */
     static List<StackTraceElement> kept(StackTraceElement[] stack) {
         List<StackTraceElement> calls = new ArrayList<>();

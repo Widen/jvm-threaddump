@@ -65,25 +65,27 @@ final class ThreadSection
     private List<List<ThreadSnapshot>> groups() {
         List<List<ThreadSnapshot>> groups = new ArrayList<>();
         Map<List<StackTraceElement>, List<ThreadSnapshot>> groupsByStack = new HashMap<>();
-        List<StackTraceElement> previousStack = null;
         for (ThreadSnapshot thread : snapshot.threads) {
             List<StackTraceElement> stack = Arrays.asList(thread.stack());
             List<ThreadSnapshot> group = null;
             if (!stack.isEmpty() && grouping == ThreadGrouping.SAME_STACK) {
                 group = groupsByStack.get(stack);
-            } else if (!stack.isEmpty() && grouping == ThreadGrouping.NEIGHBORS && stack.equals(previousStack)) {
-                group = groups.get(groups.size() - 1);
+            } else if (!stack.isEmpty() && grouping == ThreadGrouping.NEIGHBORS && !groups.isEmpty()) {
+                List<ThreadSnapshot> last = groups.get(groups.size() - 1);
+                group = stack.equals(Arrays.asList(last.get(0).stack())) ? last : null;
             }
             if (group == null) {
                 group = new ArrayList<>();
                 groups.add(group);
-                groupsByStack.put(stack, group);
+                if (!stack.isEmpty() && grouping == ThreadGrouping.SAME_STACK) {
+                    groupsByStack.put(stack, group);
+                }
             }
             group.add(thread);
-            previousStack = stack;
         }
         return groups;
     }
+
     /**
      * Counts the threads per state, such as {@code 12 RUNNABLE, 43 BLOCKED}, in {@link Thread.State} order and
      * without the states that have no threads.

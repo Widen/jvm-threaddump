@@ -86,7 +86,8 @@ final class StackFilter
             boolean insideRun = library != null && i > 0 && i < calls.size() - 1
                     && library.equals(collapsedPrefix(calls.get(i - 1)))
                     && library.equals(collapsedPrefix(calls.get(i + 1)));
-            if (!insideRun) {
+            // A run's two ends can be the same call, such as a library calling back into itself.
+            if (!insideRun && (i == 0 || !sameCall(calls.get(i), kept.get(kept.size() - 1)))) {
                 kept.add(calls.get(i));
             }
         }

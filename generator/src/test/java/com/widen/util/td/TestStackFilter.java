@@ -136,6 +136,18 @@ public class TestStackFilter
     }
 
     @Test
+    void dropsARepeatThatARunsEndsLeaveNextToEachOther() {
+        StackTraceElement[] stack = {
+                FakeThreads.frame("com.example.App", "poll"),
+                new StackTraceElement("io.netty.X", "m", "X.java", 10),
+                FakeThreads.frame("io.netty.Y", "n"),
+                new StackTraceElement("io.netty.X", "m", "X.java", 20),
+                FakeThreads.frame("com.example.App", "run")};
+
+        assertThat(StackFilter.kept(stack)).containsExactly(stack[0], stack[1], stack[4]);
+    }
+
+    @Test
     void keepsBothFramesOfATwoFrameRun() {
         StackTraceElement[] stack = {
                 FakeThreads.frame("com.amazonaws.A", "a"),

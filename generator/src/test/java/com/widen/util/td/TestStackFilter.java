@@ -39,12 +39,49 @@ public class TestStackFilter
             "com.example.Dao|false",
             "com.example.Dao$Inner|false",
             "com.example.$Odd|false",
-            "java.lang.Thread|false",
+            "java.lang.Object|false",
             "org.postgresql.core.PGStream|false",
             "com.zaxxer.hikari.pool.HikariPool|false",
             "org.hibernate.loader.Loader|false"})
     void hidesPlumbingFrames(String className, boolean hidden) {
         assertThat(StackFilter.hidden(FakeThreads.frame(className, "run"))).isEqualTo(hidden);
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "java.util.concurrent.locks.LockSupport|park|true",
+            "java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject|await|true",
+            "java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode|block|true",
+            "java.util.concurrent.locks.AbstractQueuedLongSynchronizer|acquire|true",
+            "java.util.concurrent.ThreadPoolExecutor|runWorker|true",
+            "java.util.concurrent.ThreadPoolExecutor$Worker|run|true",
+            "java.util.concurrent.FutureTask|run|true",
+            "java.util.concurrent.FutureTask|runAndReset|true",
+            "java.util.concurrent.Executors$RunnableAdapter|call|true",
+            "java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask|run|true",
+            "java.util.concurrent.ForkJoinWorkerThread|run|true",
+            "java.util.concurrent.ForkJoinPool|runWorker|true",
+            "java.util.concurrent.ForkJoinPool|managedBlock|true",
+            "java.util.concurrent.ForkJoinPool|unmanagedBlock|true",
+            "java.lang.Thread|run|true",
+            "java.lang.Thread|runWith|true",
+            "io.netty.util.concurrent.SingleThreadEventExecutor$4|run|true",
+            "io.netty.util.internal.ThreadExecutorMap$2|run|true",
+            "io.netty.util.concurrent.FastThreadLocalRunnable|run|true",
+            "software.amazon.awssdk.http.apache5.Apache5HttpClient|access$700|true",
+            "com.example.Outer|access$000|true",
+            "java.util.concurrent.ThreadPoolExecutor|getTask|false",
+            "java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue|take|false",
+            "java.util.concurrent.LinkedBlockingQueue|take|false",
+            "java.util.concurrent.locks.ReentrantLock|lock|false",
+            "java.lang.Thread|sleep|false",
+            "io.netty.channel.nio.NioEventLoop|run|false",
+            "io.netty.util.concurrent.SingleThreadEventExecutor|runAllTasks|false",
+            "com.example.Outer|accessible|false",
+            "com.example.Outer|access$|false",
+            "com.example.Outer|lambda$run$0|false"})
+    void hidesExecutorNettyAndAccessorPlumbing(String className, String method, boolean hidden) {
+        assertThat(StackFilter.hidden(FakeThreads.frame(className, method))).isEqualTo(hidden);
     }
 
     @Test

@@ -2,11 +2,14 @@ package com.widen.util.td;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
- * Decides which stack frames are plumbing: reflection, generated proxies, and the Tapestry and servlet container
- * layers that sit between the application's own calls.
+ * Decides which stack frames are plumbing: reflection, generated proxies, the Tapestry and servlet container layers
+ * that sit between the application's own calls, executor and lock plumbing, Netty's thread wrappers, and accessors.
  */
 final class StackFilter
 {
@@ -19,7 +22,28 @@ final class StackFilter
             "org.eclipse.jetty.", "org.glassfish.jersey.", "org.glassfish.hk2.", "org.jvnet.hk2.",
             // Not all of org.apache.tomcat., which would hide the Tomcat JDBC pool a thread waits in.
             "org.apache.catalina.", "org.apache.coyote.", "org.apache.tomcat.util.", "org.apache.tomcat.websocket.",
-            "javax.servlet.", "jakarta.servlet.");
+            "javax.servlet.", "jakarta.servlet.",
+            "java.util.concurrent.locks.LockSupport", "java.util.concurrent.locks.AbstractQueuedSynchronizer",
+            "java.util.concurrent.locks.AbstractQueuedLongSynchronizer",
+            "io.netty.util.concurrent.SingleThreadEventExecutor$", "io.netty.util.internal.ThreadExecutorMap$",
+            "io.netty.util.concurrent.FastThreadLocalRunnable");
+
+    /** The {@code class#method} keys of the executor frames every pool thread or submitted task passes through. */
+    private static final Set<String> HIDDEN_METHODS = new HashSet<>(Arrays.asList(
+            "java.util.concurrent.ThreadPoolExecutor#runWorker",
+            "java.util.concurrent.ThreadPoolExecutor$Worker#run",
+            "java.util.concurrent.FutureTask#run",
+            "java.util.concurrent.FutureTask#runAndReset",
+            "java.util.concurrent.Executors$RunnableAdapter#call",
+            "java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask#run",
+            "java.util.concurrent.ForkJoinWorkerThread#run",
+            "java.util.concurrent.ForkJoinPool#runWorker",
+            "java.util.concurrent.ForkJoinPool#managedBlock",
+            "java.util.concurrent.ForkJoinPool#unmanagedBlock",
+            "java.lang.Thread#run",
+            "java.lang.Thread#runWith"));
+
+    private static final Pattern ACCESSOR = Pattern.compile("access\\$\\d+");
 
     private StackFilter() {
     }
@@ -32,7 +56,9 @@ final class StackFilter
         String className = frame.getClassName();
         return startsWithAny(className, HIDDEN_PREFIXES)
                 || (className.indexOf('.') < 0 && className.startsWith("$"))
-                || className.contains("$$");
+                || className.contains("$$")
+                || HIDDEN_METHODS.contains(className + "#" + frame.getMethodName())
+                || ACCESSOR.matcher(frame.getMethodName()).matches();
     }
 
     /**

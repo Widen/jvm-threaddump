@@ -38,7 +38,7 @@ public class TestThreadSection
                         "\"worker-1\" priority=5 id=0x17 group=test-group cpu=-1 block_cnt=1 wait_cnt=2 WAITING"
                                 + " (waiting on 0x1f for java.util.concurrent.locks.ReentrantLock$NonfairSync@1b6d3586)",
                         "    com.example.Worker.run(Worker.java:42)",
-                        "    java.lang.Thread.run(Thread.java:750)",
+                        "    ... 1 frame hidden",
                         "");
     }
 
@@ -121,8 +121,7 @@ public class TestThreadSection
                 header("worker", 23),
                 "    com.example.Dao.find(Dao.java:1)",
                 "    com.example.Api.get(Api.java:1)",
-                "    java.lang.Thread.run(Thread.java:1)",
-                "    ... 3 frames hidden",
+                "    ... 4 frames hidden",
                 "");
     }
 

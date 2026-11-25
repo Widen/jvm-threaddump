@@ -1,8 +1,8 @@
 package com.widen.util.td;
 
 /**
- * How the thread list prints threads whose stacks are equal: the same frames in the same order, line numbers
- * included. A group prints every member's header, in name order, then the shared stack once. A thread with an empty
+ * How the thread list prints threads whose stacks are equal: frames that print the same, in the same order, line
+ * numbers included. A group prints every member's header, in name order, then the shared stack once. A thread with an empty
  * stack always prints alone.
  */
 public enum ThreadGrouping

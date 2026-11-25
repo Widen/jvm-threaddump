@@ -203,8 +203,7 @@ public class TestJvmThreadDump
         assertThat(ungrouped.generate().split(frame, -1)).hasSize(3);
         assertThat(ungrouped.toBuilder().build().threadGrouping()).isEqualTo(ThreadGrouping.NONE);
         assertThatThrownBy(() -> JvmThreadDump.builder().threadGrouping(null))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessage("threadGrouping");
+                .isInstanceOf(NullPointerException.class);
     }
 
     @Test

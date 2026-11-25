@@ -4,6 +4,7 @@ import java.lang.management.ThreadInfo;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -64,10 +65,11 @@ final class ThreadSection
      */
     private List<List<ThreadSnapshot>> groups() {
         List<List<ThreadSnapshot>> groups = new ArrayList<>();
-        Map<List<StackTraceElement>, List<ThreadSnapshot>> groupsByStack = new HashMap<>();
-        List<StackTraceElement> lastGroupStack = null;
+        Map<List<String>, List<ThreadSnapshot>> groupsByStack = new HashMap<>();
+        List<String> lastGroupStack = null;
         for (ThreadSnapshot thread : snapshot.threads) {
-            List<StackTraceElement> stack = Arrays.asList(thread.stack());
+            // Compares frames as printed: StackTraceElement.equals also compares the class loader and module.
+            List<String> stack = grouping == ThreadGrouping.NONE ? Collections.emptyList() : printed(thread.stack());
             boolean bySameStack = !stack.isEmpty() && grouping == ThreadGrouping.SAME_STACK;
             List<ThreadSnapshot> group = null;
             if (bySameStack) {
@@ -86,6 +88,14 @@ final class ThreadSection
             group.add(thread);
         }
         return groups;
+    }
+
+    private static List<String> printed(StackTraceElement[] stack) {
+        List<String> frames = new ArrayList<>(stack.length);
+        for (StackTraceElement frame : stack) {
+            frames.add(formatFrame(frame));
+        }
+        return frames;
     }
 
     /**

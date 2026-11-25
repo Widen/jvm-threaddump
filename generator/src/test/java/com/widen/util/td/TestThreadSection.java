@@ -1,6 +1,7 @@
 package com.widen.util.td;
 
 import java.lang.management.ThreadInfo;
+import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -9,10 +10,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import static com.widen.util.td.TestText.titled;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.Mockito.when;
 
@@ -248,12 +251,33 @@ public class TestThreadSection
     }
 
     @Test
-    void neverGroupsEmptyStacks() {
+    void groupsStacksThatPrintTheSameFromTwoClassLoaders() throws ReflectiveOperationException {
+        Constructor<StackTraceElement> withLoader;
+        try {
+            withLoader = StackTraceElement.class.getConstructor(String.class, String.class, String.class,
+                    String.class, String.class, String.class, int.class);
+        } catch (NoSuchMethodException java8) {
+            withLoader = null;
+        }
+        assumeTrue(withLoader != null, "Java 8 frames have no class loader name");
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("a", 1, Thread.State.RUNNABLE,
+                withLoader.newInstance("app-1", null, null, "com.example.Loop", "spin", "Loop.java", 1));
+        jvm.addThread("b", 2, Thread.State.RUNNABLE,
+                withLoader.newInstance("app-2", null, null, "com.example.Loop", "spin", "Loop.java", 1));
+
+        assertThat(threadList(jvm, ThreadGrouping.SAME_STACK)).containsExactly(
+                header("a", 1), header("b", 2), LOOP_SPIN, "");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ThreadGrouping.class, names = {"SAME_STACK", "NEIGHBORS"})
+    void neverGroupsEmptyStacks(ThreadGrouping grouping) {
         FakeJvm jvm = new FakeJvm();
         jvm.addThread("e1", 1, Thread.State.RUNNABLE);
         jvm.addThread("e2", 2, Thread.State.RUNNABLE);
 
-        assertThat(threadList(jvm, ThreadGrouping.SAME_STACK)).containsExactly(
+        assertThat(threadList(jvm, grouping)).containsExactly(
                 header("e1", 1), "",
                 header("e2", 2), "");
     }

@@ -4,7 +4,9 @@ import java.lang.management.ThreadInfo;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -22,11 +24,13 @@ final class ThreadSection
     private final JvmSnapshot snapshot;
     private final Findings findings;
     private final boolean allFrames;
+    private final ThreadGrouping grouping;
 
-    ThreadSection(JvmSnapshot snapshot, Findings findings, boolean allFrames) {
+    ThreadSection(JvmSnapshot snapshot, Findings findings, boolean allFrames, ThreadGrouping grouping) {
         this.snapshot = snapshot;
         this.findings = findings;
         this.allFrames = allFrames;
+        this.grouping = grouping;
     }
 
     List<Line> lines() {
@@ -37,9 +41,11 @@ final class ThreadSection
         }
         lines.add(new TitledLine("Thread Count", count));
         lines.add(new BlankLine());
-        for (ThreadSnapshot thread : snapshot.threads) {
-            lines.add(new SimpleLine(formatHeader(thread) + findings.marker(Finding.threadMark(thread.id()))));
-            StackTraceElement[] stack = thread.stack();
+        for (List<ThreadSnapshot> group : groups()) {
+            for (ThreadSnapshot thread : group) {
+                lines.add(new SimpleLine(formatHeader(thread) + findings.marker(Finding.threadMark(thread.id()))));
+            }
+            StackTraceElement[] stack = group.get(0).stack();
             List<StackTraceElement> shown = allFrames ? Arrays.asList(stack) : StackFilter.kept(stack);
             for (StackTraceElement frame : shown) {
                 lines.add(new SimpleLine(formatFrame(frame)));
@@ -52,6 +58,44 @@ final class ThreadSection
             lines.add(new BlankLine());
         }
         return lines;
+    }
+
+    /**
+     * Splits the threads, in name order, into the groups that share one printed stack.
+     */
+    private List<List<ThreadSnapshot>> groups() {
+        List<List<ThreadSnapshot>> groups = new ArrayList<>();
+        Map<List<String>, List<ThreadSnapshot>> groupsByStack = new HashMap<>();
+        List<String> lastGroupStack = null;
+        for (ThreadSnapshot thread : snapshot.threads) {
+            // Compares frames as printed: StackTraceElement.equals also compares the class loader and module.
+            List<String> stack = grouping == ThreadGrouping.NONE ? Collections.emptyList() : printed(thread.stack());
+            boolean bySameStack = !stack.isEmpty() && grouping == ThreadGrouping.SAME_STACK;
+            List<ThreadSnapshot> group = null;
+            if (bySameStack) {
+                group = groupsByStack.get(stack);
+            } else if (!stack.isEmpty() && grouping == ThreadGrouping.NEIGHBORS && stack.equals(lastGroupStack)) {
+                group = groups.get(groups.size() - 1);
+            }
+            if (group == null) {
+                group = new ArrayList<>();
+                groups.add(group);
+                lastGroupStack = stack;
+                if (bySameStack) {
+                    groupsByStack.put(stack, group);
+                }
+            }
+            group.add(thread);
+        }
+        return groups;
+    }
+
+    private static List<String> printed(StackTraceElement[] stack) {
+        List<String> frames = new ArrayList<>(stack.length);
+        for (StackTraceElement frame : stack) {
+            frames.add(formatFrame(frame));
+        }
+        return frames;
     }
 
     /**

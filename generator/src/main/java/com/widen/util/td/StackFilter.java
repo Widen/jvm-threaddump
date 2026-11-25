@@ -2,11 +2,14 @@ package com.widen.util.td;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
- * Decides which stack frames are plumbing: reflection, generated proxies, and the Tapestry and servlet container
- * layers that sit between the application's own calls.
+ * Decides which stack frames are plumbing: reflection, generated proxies, the Tapestry and servlet container layers
+ * that sit between the application's own calls, executor and lock plumbing, Netty's thread wrappers, and accessors.
  */
 final class StackFilter
 {
@@ -19,7 +22,34 @@ final class StackFilter
             "org.eclipse.jetty.", "org.glassfish.jersey.", "org.glassfish.hk2.", "org.jvnet.hk2.",
             // Not all of org.apache.tomcat., which would hide the Tomcat JDBC pool a thread waits in.
             "org.apache.catalina.", "org.apache.coyote.", "org.apache.tomcat.util.", "org.apache.tomcat.websocket.",
-            "javax.servlet.", "jakarta.servlet.");
+            "javax.servlet.", "jakarta.servlet.",
+            "java.util.concurrent.locks.LockSupport", "java.util.concurrent.locks.AbstractQueuedSynchronizer",
+            "java.util.concurrent.locks.AbstractQueuedLongSynchronizer",
+            "io.netty.util.concurrent.SingleThreadEventExecutor$", "io.netty.util.internal.ThreadExecutorMap$",
+            "io.netty.util.concurrent.FastThreadLocalRunnable");
+
+    /** The {@code class#method} keys of the executor frames every pool thread or submitted task passes through. */
+    private static final Set<String> HIDDEN_METHODS = new HashSet<>(Arrays.asList(
+            "java.util.concurrent.ThreadPoolExecutor#runWorker",
+            "java.util.concurrent.ThreadPoolExecutor$Worker#run",
+            "java.util.concurrent.FutureTask#run",
+            "java.util.concurrent.FutureTask#runAndReset",
+            "java.util.concurrent.Executors$RunnableAdapter#call",
+            "java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask#run",
+            "java.util.concurrent.ForkJoinWorkerThread#run",
+            "java.util.concurrent.ForkJoinPool#runWorker",
+            "java.util.concurrent.ForkJoinPool#managedBlock",
+            "java.util.concurrent.ForkJoinPool#unmanagedBlock",
+            "java.lang.Thread#run",
+            "java.lang.Thread#runWith"));
+
+    private static final Pattern ACCESSOR = Pattern.compile("access\\$\\d+");
+
+    /** The client and I/O libraries whose runs of frames collapse to their innermost and outermost frame. */
+    private static final List<String> COLLAPSED_PREFIXES = Arrays.asList(
+            "software.amazon.awssdk.", "com.amazonaws.",
+            "org.apache.hc.", "org.apache.http.", "okhttp3.", "okio.", "io.netty.",
+            "sun.nio.ch.", "sun.security.ssl.", "java.net.");
 
     private StackFilter() {
     }
@@ -32,20 +62,49 @@ final class StackFilter
         String className = frame.getClassName();
         return startsWithAny(className, HIDDEN_PREFIXES)
                 || (className.indexOf('.') < 0 && className.startsWith("$"))
-                || className.contains("$$");
+                || className.contains("$$")
+                || HIDDEN_METHODS.contains(callKey(frame))
+                || ACCESSOR.matcher(frame.getMethodName()).matches();
     }
 
     /**
-     * Returns the top frame, which is always kept, followed by every other frame that is not hidden.
+     * Returns the top frame, which is always kept, followed by every other frame that is not hidden. Of each run of
+     * two or more of those frames from one collapsed library, only the first and the last are kept. Last, a frame
+     * that repeats the class and method of the frame kept before it is dropped, so a run whose outer end repeats the
+     * call above it prints the frame where its caller entered the library.
      */
     static List<StackTraceElement> kept(StackTraceElement[] stack) {
-        List<StackTraceElement> kept = new ArrayList<>();
+        List<StackTraceElement> calls = new ArrayList<>();
         for (int i = 0; i < stack.length; i++) {
             if (i == 0 || !hidden(stack[i])) {
-                kept.add(stack[i]);
+                calls.add(stack[i]);
+            }
+        }
+
+        List<StackTraceElement> kept = new ArrayList<>();
+        for (int i = 0; i < calls.size(); i++) {
+            String library = collapsedPrefix(calls.get(i));
+            boolean insideRun = library != null && i > 0 && i < calls.size() - 1
+                    && library.equals(collapsedPrefix(calls.get(i - 1)))
+                    && library.equals(collapsedPrefix(calls.get(i + 1)));
+            if (!insideRun && (i == 0 || !sameCall(calls.get(i), kept.get(kept.size() - 1)))) {
+                kept.add(calls.get(i));
             }
         }
         return kept;
+    }
+
+    /** The {@code class#method} key that names a call whatever its line. */
+    static String callKey(StackTraceElement frame) {
+        return frame.getClassName() + "#" + frame.getMethodName();
+    }
+
+    static boolean sameCall(StackTraceElement frame, StackTraceElement other) {
+        return callKey(frame).equals(callKey(other));
+    }
+
+    private static String collapsedPrefix(StackTraceElement frame) {
+        return matchingPrefix(frame.getClassName(), COLLAPSED_PREFIXES);
     }
 
     /**
@@ -61,11 +120,16 @@ final class StackFilter
     }
 
     static boolean startsWithAny(String className, List<String> prefixes) {
+        return matchingPrefix(className, prefixes) != null;
+    }
+
+    /** Returns the first of the prefixes the class name starts with, or null when there is none. */
+    private static String matchingPrefix(String className, List<String> prefixes) {
         for (String prefix : prefixes) {
             if (className.startsWith(prefix)) {
-                return true;
+                return prefix;
             }
         }
-        return false;
+        return null;
     }
 }

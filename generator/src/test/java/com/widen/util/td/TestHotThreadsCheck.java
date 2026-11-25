@@ -31,7 +31,7 @@ public class TestHotThreadsCheck
                 FakeThreads.frame("com.example.A", "spin"),
                 FakeThreads.frame("$A_1a", "spin"),
                 FakeThreads.frame("com.example.A", "run"),
-                FakeThreads.frame("java.lang.Thread", "run"),
+                FakeThreads.frame("com.example.A", "loop"),
                 FakeThreads.frame("com.example.Main", "main"));
         jvm.addBusyThread("b", 2, 500 * MS);
         jvm.addBusyThread("c", 3, 499 * MS);
@@ -45,7 +45,7 @@ public class TestHotThreadsCheck
                 "\"a\" (0x1) 90% of one core",
                 "    com.example.A.spin(A.java:1)",
                 "    com.example.A.run(A.java:1)",
-                "    java.lang.Thread.run(Thread.java:1)",
+                "    com.example.A.loop(A.java:1)",
                 "\"b\" (0x2) 50% of one core");
         assertThat(findings.get(0).marks).containsExactly("thread:1", "thread:2");
     }

@@ -97,7 +97,7 @@ final class StackPileUpCheck implements Check
             return true;
         }
         if (thread.state() == Thread.State.RUNNABLE) {
-            return NATIVE_WAITS.contains(callKey(stack[0]));
+            return NATIVE_WAITS.contains(StackFilter.callKey(stack[0]));
         }
         if (thread.state() != Thread.State.WAITING && thread.state() != Thread.State.TIMED_WAITING) {
             return false;
@@ -114,11 +114,7 @@ final class StackPileUpCheck implements Check
     private static String groupKey(ThreadSnapshot thread) {
         StackTraceElement[] stack = thread.stack();
         StackTraceElement library = StackFilter.firstKeptOutsideJdk(stack);
-        return callKey(stack[0]) + "|" + (library == null ? "" : callKey(library));
-    }
-
-    private static String callKey(StackTraceElement frame) {
-        return frame.getClassName() + "#" + frame.getMethodName();
+        return StackFilter.callKey(stack[0]) + "|" + (library == null ? "" : StackFilter.callKey(library));
     }
 
     private static Finding finding(List<ThreadSnapshot> pile) {
@@ -128,7 +124,7 @@ final class StackPileUpCheck implements Check
         List<String> lines = new ArrayList<>();
         lines.add(pile.size() + " threads are in the same call (" + ThreadSection.formatStateCounts(pile) + ")");
         lines.add(ThreadSection.formatFrame(stack[0]));
-        if (library != null && !callKey(library).equals(callKey(stack[0]))) {
+        if (library != null && !StackFilter.sameCall(library, stack[0])) {
             lines.add(ThreadSection.formatFrame(library));
         }
 

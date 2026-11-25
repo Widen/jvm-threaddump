@@ -15,7 +15,7 @@ public class TestLockPileUpCheck
             FakeThreads.frame("com.example.H", "work"),
             FakeThreads.frame("$H_1a", "work"),
             FakeThreads.frame("com.example.H", "run"),
-            FakeThreads.frame("java.lang.Thread", "run"),
+            FakeThreads.frame("com.example.H", "loop"),
             FakeThreads.frame("com.example.Main", "main") };
 
     /** Adds {@code count} threads, blocked on a lock that {@code holderId} holds, with ids from {@code holderId * 100}. */
@@ -53,7 +53,7 @@ public class TestLockPileUpCheck
                 "6 threads wait on a lock held by \"h\" (0xa, RUNNABLE)",
                 "    com.example.H.work(H.java:1)",
                 "    com.example.H.run(H.java:1)",
-                "    java.lang.Thread.run(Thread.java:1)");
+                "    com.example.H.loop(H.java:1)");
         assertThat(findings.get(0).marks).containsExactly("thread:10");
     }
 

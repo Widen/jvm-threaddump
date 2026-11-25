@@ -24,16 +24,19 @@ public final class JvmThreadDump
     private final Duration sampleWindow;
     private final boolean allFrames;
     private final List<String> idleLibraryPrefixes;
+    private final ThreadGrouping threadGrouping;
     private final List<Check> checks;
 
     private JvmThreadDump(JvmSources jvm, List<String> mainArguments, Map<String, ?> customValues,
-            Duration sampleWindow, boolean allFrames, List<String> idleLibraryPrefixes) {
+            Duration sampleWindow, boolean allFrames, List<String> idleLibraryPrefixes,
+            ThreadGrouping threadGrouping) {
         this.jvm = jvm;
         this.mainArguments = mainArguments;
         this.customValues = customValues;
         this.sampleWindow = sampleWindow;
         this.allFrames = allFrames;
         this.idleLibraryPrefixes = idleLibraryPrefixes;
+        this.threadGrouping = threadGrouping;
         this.checks = Checks.all(idleLibraryPrefixes);
     }
 
@@ -61,7 +64,8 @@ public final class JvmThreadDump
                 .customValues(customValues)
                 .sampleWindow(sampleWindow)
                 .allFrames(allFrames)
-                .idleLibraryPrefixes(idleLibraryPrefixes);
+                .idleLibraryPrefixes(idleLibraryPrefixes)
+                .threadGrouping(threadGrouping);
     }
 
     Duration sampleWindow() {
@@ -70,6 +74,10 @@ public final class JvmThreadDump
 
     boolean allFrames() {
         return allFrames;
+    }
+
+    ThreadGrouping threadGrouping() {
+        return threadGrouping;
     }
 
     /**
@@ -86,7 +94,7 @@ public final class JvmThreadDump
         lines.addAll(new MemorySection(jvm, snapshot, findings).lines());
         lines.addAll(new GcSection(snapshot, findings).lines());
         lines.addAll(new DeadlockSection(snapshot).lines());
-        lines.addAll(new ThreadSection(snapshot, findings, allFrames).lines());
+        lines.addAll(new ThreadSection(snapshot, findings, allFrames, threadGrouping).lines());
         return Line.render(lines);
     }
 
@@ -102,6 +110,7 @@ public final class JvmThreadDump
         private Duration sampleWindow = Duration.ofSeconds(1);
         private boolean allFrames;
         private List<String> idleLibraryPrefixes = Collections.emptyList();
+        private ThreadGrouping threadGrouping = ThreadGrouping.SAME_STACK;
 
         private Builder() {
         }
@@ -145,8 +154,10 @@ public final class JvmThreadDump
         }
 
         /**
-         * Sets whether every stack frame prints. By default the dump hides reflection, generated proxy, Tapestry, and
-         * servlet container frames and prints how many it hid; the top frame of each stack always prints.
+         * Sets whether every stack frame prints. By default the dump hides reflection, generated proxy, Tapestry,
+         * servlet container, executor and lock plumbing, Netty thread wrapper, and accessor frames, calls that repeat
+         * the frame above, and the middle of client library calls, and prints how many it hid; the top frame of each
+         * stack always prints.
          */
         public Builder allFrames(boolean allFrames) {
             this.allFrames = allFrames;
@@ -166,6 +177,17 @@ public final class JvmThreadDump
             return this;
         }
 
+        /**
+         * Sets how the thread list prints threads whose stacks are equal. The default is
+         * {@link ThreadGrouping#SAME_STACK}.
+         *
+         * @throws NullPointerException if the grouping is null
+         */
+        public Builder threadGrouping(ThreadGrouping threadGrouping) {
+            this.threadGrouping = Objects.requireNonNull(threadGrouping, "threadGrouping");
+            return this;
+        }
+
         Builder jvmSources(JvmSources jvm) {
             this.jvm = Objects.requireNonNull(jvm, "jvm");
             return this;
@@ -182,7 +204,8 @@ public final class JvmThreadDump
                     Collections.unmodifiableMap(new LinkedHashMap<>(customValues)),
                     sampleWindow,
                     allFrames,
-                    Collections.unmodifiableList(new ArrayList<>(idleLibraryPrefixes)));
+                    Collections.unmodifiableList(new ArrayList<>(idleLibraryPrefixes)),
+                    threadGrouping);
         }
 
     }

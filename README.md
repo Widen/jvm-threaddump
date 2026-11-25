@@ -98,7 +98,7 @@ import com.widen.util.td.JvmThreadDump;
 String dump = JvmThreadDump.create().generate();
 ```
 
-Two request parameters change one servlet dump:
+Three request parameters change one servlet dump:
 
 - `/td?window=5` samples for five seconds. The window is a whole number of
   seconds from 0 to 30, and `window=0` returns at once without sampling. Any
@@ -106,6 +106,12 @@ Two request parameters change one servlet dump:
   `window must be a whole number of seconds from 0 to 30`.
 - `/td?frames=all` prints every stack frame. Any other value gets status 400
   with the body `frames must be all`.
+- `/td?group=same-stack`, `neighbors`, or `none` sets how the thread list prints
+  threads that share a stack: under the first thread with that stack, only
+  between neighbors in name order, or once per thread (see
+  [Repeated stacks](#repeated-stacks)). Any other value, including a different
+  case, gets status 400 with the body
+  `group must be same-stack, neighbors, or none`.
 
 ## Securing `/td`
 
@@ -331,18 +337,48 @@ on any JVM.
 ## The frame filter
 
 Most frames in a stack are plumbing. The thread list hides them, so the
-application's own calls stand out. A frame is hidden when its class matches one
-of these rules:
+application's own calls stand out. A frame is hidden when its class, its method,
+or both match one of these rules:
 
-| Kind | Classes |
+| Kind | Frames |
 | --- | --- |
 | Reflection and method handles | `sun.reflect.`, `jdk.internal.reflect.`, `java.lang.reflect.`, `java.lang.invoke.` |
 | Generated proxies | a class with no package whose name starts with `$` (a Tapestry service proxy or its advice invocation), `com.sun.proxy.`, `jdk.proxy`, and any class whose name contains `$$` (CGLIB, Javassist, Hibernate proxies, and lambda classes) |
 | Tapestry | everything under `org.apache.tapestry5.` |
 | Server dispatch | `org.eclipse.jetty.`, `org.glassfish.jersey.`, `org.glassfish.hk2.`, `org.jvnet.hk2.`, `org.apache.catalina.`, `org.apache.coyote.`, `org.apache.tomcat.util.`, `org.apache.tomcat.websocket.`, `javax.servlet.`, `jakarta.servlet.` |
+| Lock plumbing | every method of `java.util.concurrent.locks.LockSupport` and of the classes starting with `java.util.concurrent.locks.AbstractQueuedSynchronizer` or `java.util.concurrent.locks.AbstractQueuedLongSynchronizer` |
+| Executor plumbing | `ThreadPoolExecutor.runWorker`, `ThreadPoolExecutor$Worker.run`, `FutureTask.run`, `FutureTask.runAndReset`, `Executors$RunnableAdapter.call`, `ScheduledThreadPoolExecutor$ScheduledFutureTask.run`, `ForkJoinWorkerThread.run`, `ForkJoinPool.runWorker`, `ForkJoinPool.managedBlock`, and `ForkJoinPool.unmanagedBlock`, all in `java.util.concurrent.`, and `java.lang.Thread.run` and `java.lang.Thread.runWith` |
+| Netty thread wrappers | classes starting with `io.netty.util.concurrent.SingleThreadEventExecutor$`, `io.netty.util.internal.ThreadExecutorMap$`, or `io.netty.util.concurrent.FastThreadLocalRunnable` |
+| Accessors | a method in any class named `access$` followed by digits, which javac generates so an inner class can reach a private member |
 
-The top frame of a stack always prints, whatever its class, because it says what
-the thread is doing now. One line after the last frame gives the number of
+A run of two or more frames from one client or I/O library keeps only its first
+and last frame. The first, the innermost, shows what the library is doing, such
+as a connection pool lease or a retry backoff. The last shows how the caller
+entered the library. Runs are judged after the rules above, so a hidden frame
+inside a run does not split it. Frames from two different libraries form two
+runs, even when they sit next to each other. The libraries are:
+
+| Library | Prefix |
+| --- | --- |
+| AWS SDK v2 | `software.amazon.awssdk.` |
+| AWS SDK v1 | `com.amazonaws.` |
+| Apache HttpClient 5 | `org.apache.hc.` |
+| Apache HttpClient 4 | `org.apache.http.` |
+| OkHttp | `okhttp3.` |
+| Okio | `okio.` |
+| Netty | `io.netty.` |
+| JDK NIO | `sun.nio.ch.` |
+| JDK TLS | `sun.security.ssl.` |
+| JDK networking | `java.net.` |
+
+Last, a frame whose class and method equal those of the frame kept above it is
+hidden. This drops overload and bridge pairs, such as two
+`SocketInputStream.read` frames in a row, and folds deep recursion into one
+frame. Of a pair at the outer end of a library run, the lower frame stays, so
+the run still shows where its caller entered the library.
+
+The top frame of a stack always prints, whatever the rules say, because it says
+what the thread is doing now. One line after the last frame gives the number of
 hidden frames, and the dump omits the line when no frame is hidden:
 
 ```text
@@ -351,8 +387,7 @@ hidden frames, and the dump omits the line when no frame is hidden:
     org.postgresql.jdbc.PgPreparedStatement.executeQuery(PgPreparedStatement.java:134)
     com.widen.assets.AssetDao.find(AssetDao.java:88)
     com.widen.api.AssetResource.get(AssetResource.java:57)
-    java.lang.Thread.run(Thread.java:840)
-    ... 47 frames hidden
+    ... 48 frames hidden
 ```
 
 - `Builder.allFrames(true)` and `/td?frames=all` print every frame in the thread
@@ -360,6 +395,40 @@ hidden frames, and the dump omits the line when no frame is hidden:
 - A finding always prints filtered frames as evidence, so the same JVM state
   gives the same findings whatever the setting.
 - The rules are fixed. A consumer cannot add its own.
+
+## Repeated stacks
+
+Pool threads often wait in the same place, so many threads print the same stack.
+The thread list prints a shared stack once, under the headers of every thread
+that has it. Each header keeps its own state and finding marker, and
+`Thread Count` still counts threads, not groups:
+
+```text
+"MariaDb-timeout" daemon priority=5 id=0x70 group=main cpu=0ms block_cnt=0 wait_cnt=10 WAITING
+"MariaDb-timeout" daemon priority=5 id=0x71 group=main cpu=0ms block_cnt=0 wait_cnt=8 WAITING
+"MariaDb-timeout" daemon priority=5 id=0x72 group=main cpu=0ms block_cnt=0 wait_cnt=9 WAITING
+    sun.misc.Unsafe.park(Unsafe.java)
+    java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take(ScheduledThreadPoolExecutor.java:1081)
+    java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1074)
+    ... 6 frames hidden
+
+"OkHttp ConnectionPool connection closer" daemon ...
+```
+
+`Builder.threadGrouping(ThreadGrouping)` and `/td?group=...` choose one of three
+layouts:
+
+- `SAME_STACK`, the default, prints every thread whose stack equals another's
+  under the first of them in name order. The group sits where that first thread
+  would. This is the shortest dump.
+- `NEIGHBORS` shares a stack only between threads next to each other in name
+  order, so the list keeps name order exactly.
+- `NONE` prints every thread's own stack.
+
+Two stacks are equal when their frames print the same, in the same order, line
+numbers included. The comparison uses every frame, whatever the frame filter
+hides, so threads whose printed stacks differ never share one. A thread with an
+empty stack always prints alone.
 
 ## Customization
 
@@ -377,6 +446,9 @@ Build a customized dump with `JvmThreadDump.builder()`:
   default is one second, and zero skips sampling.
 - `allFrames(boolean)` prints every stack frame in the thread list when true.
   The default is false.
+- `threadGrouping(ThreadGrouping)` sets how the thread list prints threads that
+  share a stack (see [Repeated stacks](#repeated-stacks)). The default is
+  `SAME_STACK`.
 - `idleLibraryPrefixes(List<String>)` names the packages of server and pool
   libraries whose waiting worker threads `Stack Pile-up` should treat as idle,
   such as `org.quartz.`. A prefix matches every class whose name starts with it.
@@ -409,8 +481,8 @@ The builder copies the list and the map, so later changes to them leave the
 dump unchanged.
 
 `toBuilder()` returns a builder that holds a dump's main arguments, custom
-values, window, and frame setting. Use it to build a one-off variant without
-repeating the settings:
+values, window, frame setting, idle library prefixes, and thread grouping. Use
+it to build a one-off variant without repeating the settings:
 
 ```java
 import java.time.Duration;
@@ -552,8 +624,8 @@ GC G1 Young Generation: spent 0:00:00.001 doing 1 collections
 "Finalizer" daemon priority=8 id=0x3 group=system cpu=0ms block_cnt=1 wait_cnt=2 WAITING (waiting for java.lang.ref.ReferenceQueue$Lock@59e505b2)
     java.lang.Object.wait(Object.java)
     java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:155)
-    java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:176)
     java.lang.ref.Finalizer$FinalizerThread.run(Finalizer.java:172)
+    ... 1 frame hidden
 
 "Reference Handler" daemon priority=10 id=0x2 group=system cpu=0ms block_cnt=1 wait_cnt=0 RUNNABLE
     java.lang.ref.Reference.waitForReferencePendingList(Reference.java)
@@ -565,16 +637,15 @@ GC G1 Young Generation: spent 0:00:00.001 doing 1 collections
 "Test worker" priority=5 id=0x1 group=main cpu=309ms block_cnt=1 wait_cnt=2 RUNNABLE
     sun.management.ThreadImpl.dumpThreads0(ThreadImpl.java)
     sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:528)
-    sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:516)
-    com.widen.util.td.JvmSnapshot.read(JvmSnapshot.java:106)
-    com.widen.util.td.JvmThreadDump.generate(JvmThreadDump.java:76)
-    com.widen.util.td.TestDump.printsEverySectionOfTheRunningJvm(TestDump.java:15)
+    com.widen.util.td.JvmSnapshot.read(JvmSnapshot.java:141)
+    com.widen.util.td.JvmThreadDump.generate(JvmThreadDump.java:89)
+    com.widen.util.td.TestDump.printsEverySectionOfTheRunningJvm(TestDump.java:14)
     org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:786)
     org.junit.platform.commons.support.ReflectionSupport.invokeMethod(ReflectionSupport.java:514)
     org.junit.jupiter.engine.execution.MethodInvocation.proceed(MethodInvocation.java:60)
     ...
     worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74)
-    ... 26 frames hidden
+    ... 35 frames hidden
 ```
 
 This output is trimmed. It leaves out three `CodeHeap` pools, five of the nine

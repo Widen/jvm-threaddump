@@ -1,6 +1,7 @@
 package com.widen.util.td;
 
 import java.lang.management.ThreadInfo;
+import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -9,16 +10,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import static com.widen.util.td.TestText.titled;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.Mockito.when;
 
 public class TestThreadSection
 {
     private static final String HEADER_PREFIX = "group=test-group cpu=-1 block_cnt=0 wait_cnt=0 ";
+    private static final String LOOP_SPIN = "    com.example.Loop.spin(Loop.java:1)";
+    private static final String LOOP_RUN = "    com.example.Loop.run(Loop.java:1)";
+    private static final String OTHER_WORK = "    com.example.Other.work(Other.java:1)";
 
     @Test
     void printsCountHeaderAndFrames() {
@@ -38,7 +44,7 @@ public class TestThreadSection
                         "\"worker-1\" priority=5 id=0x17 group=test-group cpu=-1 block_cnt=1 wait_cnt=2 WAITING"
                                 + " (waiting on 0x1f for java.util.concurrent.locks.ReentrantLock$NonfairSync@1b6d3586)",
                         "    com.example.Worker.run(Worker.java:42)",
-                        "    java.lang.Thread.run(Thread.java:750)",
+                        "    ... 1 frame hidden",
                         "");
     }
 
@@ -89,7 +95,7 @@ public class TestThreadSection
             jvm.addThread(names[i], ids[i], Thread.State.RUNNABLE);
         }
 
-        List<String> text = TestText.render(new ThreadSection(jvm.snapshot(), Findings.NONE, false).lines());
+        List<String> text = rendered(jvm.snapshot());
 
         assertThat(text.get(0)).isEqualTo(titled("Thread Count", "9 (9 RUNNABLE)"));
         assertThat(headersOf(text)).containsExactly(
@@ -104,7 +110,7 @@ public class TestThreadSection
         jvm.threadInfos.add(FakeThreads.info(60, Thread.State.RUNNABLE));
         jvm.addThread("kept", 61, Thread.State.RUNNABLE);
 
-        List<String> text = TestText.render(new ThreadSection(jvm.snapshot(), Findings.NONE, false).lines());
+        List<String> text = rendered(jvm.snapshot());
 
         assertThat(text.get(0)).isEqualTo(titled("Thread Count", "1 (1 RUNNABLE)"));
         assertThat(headersOf(text)).containsExactly(header("kept", 61));
@@ -115,14 +121,13 @@ public class TestThreadSection
         FakeJvm jvm = new FakeJvm();
         jvm.addThread("worker", 23, Thread.State.RUNNABLE, plumbingStack());
 
-        List<String> text = TestText.render(new ThreadSection(jvm.snapshot(), Findings.NONE, false).lines());
+        List<String> text = rendered(jvm.snapshot());
 
         assertThat(text.subList(2, text.size())).containsExactly(
                 header("worker", 23),
                 "    com.example.Dao.find(Dao.java:1)",
                 "    com.example.Api.get(Api.java:1)",
-                "    java.lang.Thread.run(Thread.java:1)",
-                "    ... 3 frames hidden",
+                "    ... 4 frames hidden",
                 "");
     }
 
@@ -133,7 +138,7 @@ public class TestThreadSection
                 FakeThreads.frame("com.example.Dao", "find"),
                 FakeThreads.frame("java.lang.reflect.Method", "invoke"));
 
-        assertThat(TestText.render(new ThreadSection(jvm.snapshot(), Findings.NONE, false).lines()))
+        assertThat(rendered(jvm.snapshot()))
                 .contains("    ... 1 frame hidden");
     }
 
@@ -142,7 +147,8 @@ public class TestThreadSection
         FakeJvm jvm = new FakeJvm();
         jvm.addThread("worker", 23, Thread.State.RUNNABLE, plumbingStack());
 
-        List<String> text = TestText.render(new ThreadSection(jvm.snapshot(), Findings.NONE, true).lines());
+        List<String> text = TestText.render(
+                new ThreadSection(jvm.snapshot(), Findings.NONE, true, ThreadGrouping.SAME_STACK).lines());
 
         assertThat(text.subList(2, text.size())).containsExactly(
                 header("worker", 23),
@@ -163,7 +169,8 @@ public class TestThreadSection
         JvmSnapshot snapshot = jvm.snapshot();
         Findings findings = StubCheck.findingsOf(snapshot, StubCheck.finding("Alpha", Finding.threadMark(23)));
 
-        List<String> headers = headersOf(TestText.render(new ThreadSection(snapshot, findings, false).lines()));
+        List<String> headers = headersOf(TestText.render(
+                new ThreadSection(snapshot, findings, false, ThreadGrouping.SAME_STACK).lines()));
 
         assertThat(headers).hasSize(2);
         assertThat(headers.get(0)).startsWith("\"other\"").doesNotContain("<<<");
@@ -180,10 +187,151 @@ public class TestThreadSection
         jvm.addThread("e", 5, Thread.State.RUNNABLE);
         jvm.addThread("f", 6, Thread.State.WAITING);
 
-        assertThat(TestText.render(new ThreadSection(jvm.snapshot(), Findings.NONE, false).lines()).get(0))
+        assertThat(rendered(jvm.snapshot()).get(0))
                 .isEqualTo(titled("Thread Count", "6 (2 RUNNABLE, 1 BLOCKED, 3 WAITING)"));
-        assertThat(TestText.render(new ThreadSection(new FakeJvm().snapshot(), Findings.NONE, false).lines()).get(0))
+        assertThat(rendered(new FakeJvm().snapshot()).get(0))
                 .isEqualTo(titled("Thread Count", "0"));
+    }
+
+    @Test
+    void gathersEveryThreadWithTheSameStackUnderTheFirst() {
+        assertThat(threadList(threadsAbc(), ThreadGrouping.SAME_STACK)).containsExactly(
+                header("a", 1), header("c", 3), LOOP_SPIN, LOOP_RUN, "",
+                header("b", 2), OTHER_WORK, "");
+    }
+
+    @Test
+    void sharesAStackOnlyBetweenNeighbors() {
+        FakeJvm jvm = threadsAbc();
+
+        assertThat(threadList(jvm, ThreadGrouping.NEIGHBORS)).containsExactly(
+                header("a", 1), LOOP_SPIN, LOOP_RUN, "",
+                header("b", 2), OTHER_WORK, "",
+                header("c", 3), LOOP_SPIN, LOOP_RUN, "");
+
+        jvm.addThread("a2", 4, Thread.State.RUNNABLE, loopStack());
+
+        assertThat(threadList(jvm, ThreadGrouping.NEIGHBORS)).containsExactly(
+                header("a", 1), header("a2", 4), LOOP_SPIN, LOOP_RUN, "",
+                header("b", 2), OTHER_WORK, "",
+                header("c", 3), LOOP_SPIN, LOOP_RUN, "");
+    }
+
+    @Test
+    void printsEveryStackWithoutGrouping() {
+        assertThat(threadList(threadsAbc(), ThreadGrouping.NONE)).containsExactly(
+                header("a", 1), LOOP_SPIN, LOOP_RUN, "",
+                header("b", 2), OTHER_WORK, "",
+                header("c", 3), LOOP_SPIN, LOOP_RUN, "");
+    }
+
+    @Test
+    void groupsOnlyEqualRawStacks() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("p", 1, Thread.State.RUNNABLE,
+                new StackTraceElement("com.example.Loop", "spin", "Loop.java", 1),
+                FakeThreads.frame("com.example.Loop", "run"));
+        jvm.addThread("q", 2, Thread.State.RUNNABLE,
+                new StackTraceElement("com.example.Loop", "spin", "Loop.java", 2),
+                FakeThreads.frame("com.example.Loop", "run"));
+        jvm.addThread("r", 3, Thread.State.RUNNABLE,
+                FakeThreads.frame("com.example.Job", "spin"),
+                FakeThreads.frame("com.example.Job", "run"));
+        jvm.addThread("s", 4, Thread.State.RUNNABLE,
+                FakeThreads.frame("com.example.Job", "spin"),
+                FakeThreads.frame("com.example.Job$$Lambda$1", "run"),
+                FakeThreads.frame("com.example.Job", "run"));
+
+        assertThat(threadList(jvm, ThreadGrouping.SAME_STACK)).containsExactly(
+                header("p", 1), LOOP_SPIN, LOOP_RUN, "",
+                header("q", 2), "    com.example.Loop.spin(Loop.java:2)", LOOP_RUN, "",
+                header("r", 3), "    com.example.Job.spin(Job.java:1)", "    com.example.Job.run(Job.java:1)", "",
+                header("s", 4), "    com.example.Job.spin(Job.java:1)", "    com.example.Job.run(Job.java:1)",
+                "    ... 1 frame hidden", "");
+    }
+
+    @Test
+    void groupsStacksThatPrintTheSameFromTwoClassLoaders() throws ReflectiveOperationException {
+        Constructor<StackTraceElement> withLoader;
+        try {
+            withLoader = StackTraceElement.class.getConstructor(String.class, String.class, String.class,
+                    String.class, String.class, String.class, int.class);
+        } catch (NoSuchMethodException java8) {
+            withLoader = null;
+        }
+        assumeTrue(withLoader != null, "Java 8 frames have no class loader name");
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("a", 1, Thread.State.RUNNABLE,
+                withLoader.newInstance("app-1", null, null, "com.example.Loop", "spin", "Loop.java", 1));
+        jvm.addThread("b", 2, Thread.State.RUNNABLE,
+                withLoader.newInstance("app-2", null, null, "com.example.Loop", "spin", "Loop.java", 1));
+
+        assertThat(threadList(jvm, ThreadGrouping.SAME_STACK)).containsExactly(
+                header("a", 1), header("b", 2), LOOP_SPIN, "");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ThreadGrouping.class, names = {"SAME_STACK", "NEIGHBORS"})
+    void neverGroupsEmptyStacks(ThreadGrouping grouping) {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("e1", 1, Thread.State.RUNNABLE);
+        jvm.addThread("e2", 2, Thread.State.RUNNABLE);
+
+        assertThat(threadList(jvm, grouping)).containsExactly(
+                header("e1", 1), "",
+                header("e2", 2), "");
+    }
+
+    @Test
+    void keepsEachMembersHeaderAndMarker() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("w", 1, Thread.State.WAITING, loopStack());
+        jvm.addThread("x", 2, Thread.State.RUNNABLE, loopStack());
+        JvmSnapshot snapshot = jvm.snapshot();
+        Findings findings = StubCheck.findingsOf(snapshot, StubCheck.finding("Alpha", Finding.threadMark(1)));
+
+        List<String> text = TestText.render(new ThreadSection(snapshot, findings, false, ThreadGrouping.SAME_STACK)
+                .lines());
+
+        assertThat(text.get(0)).isEqualTo(titled("Thread Count", "2 (1 RUNNABLE, 1 WAITING)"));
+        assertThat(text.subList(2, text.size())).containsExactly(
+                "\"w\" priority=5 id=0x1 " + HEADER_PREFIX + "WAITING <<< Alpha",
+                header("x", 2), LOOP_SPIN, LOOP_RUN, "");
+    }
+
+    @Test
+    void printsTheSharedHiddenCountOnce() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("worker-1", 1, Thread.State.RUNNABLE, plumbingStack());
+        jvm.addThread("worker-2", 2, Thread.State.RUNNABLE, plumbingStack());
+
+        assertThat(threadList(jvm, ThreadGrouping.SAME_STACK)).containsExactly(
+                header("worker-1", 1), header("worker-2", 2),
+                "    com.example.Dao.find(Dao.java:1)",
+                "    com.example.Api.get(Api.java:1)",
+                "    ... 4 frames hidden",
+                "");
+    }
+
+    private static StackTraceElement[] loopStack() {
+        return new StackTraceElement[] {
+                FakeThreads.frame("com.example.Loop", "spin"),
+                FakeThreads.frame("com.example.Loop", "run")};
+    }
+
+    /** Threads {@code a} and {@code c} share the loop stack; {@code b} has a stack of its own. */
+    private static FakeJvm threadsAbc() {
+        FakeJvm jvm = new FakeJvm();
+        jvm.addThread("a", 1, Thread.State.RUNNABLE, loopStack());
+        jvm.addThread("b", 2, Thread.State.RUNNABLE, FakeThreads.frame("com.example.Other", "work"));
+        jvm.addThread("c", 3, Thread.State.RUNNABLE, loopStack());
+        return jvm;
+    }
+
+    /** The lines after the thread count and its blank line. */
+    private static List<String> threadList(FakeJvm jvm, ThreadGrouping grouping) {
+        List<String> text = TestText.render(new ThreadSection(jvm.snapshot(), Findings.NONE, false, grouping).lines());
+        return text.subList(2, text.size());
     }
 
     private static StackTraceElement[] plumbingStack() {
@@ -214,7 +362,7 @@ public class TestThreadSection
         when(jvm.threads.isThreadCpuTimeEnabled()).thenReturn(true);
         when(jvm.threads.getThreadCpuTime(23)).thenReturn(1_500_000_000L);
 
-        assertThat(TestText.render(new ThreadSection(jvm.snapshot(), Findings.NONE, false).lines()))
+        assertThat(rendered(jvm.snapshot()))
                 .anyMatch(line -> line.contains(" cpu=1500ms "));
     }
 
@@ -225,7 +373,7 @@ public class TestThreadSection
         JvmSnapshot snapshot = jvm.snapshot();
         jvm.liveThreads.iterator().next().setName("after");
 
-        List<String> text = TestText.render(new ThreadSection(snapshot, Findings.NONE, false).lines());
+        List<String> text = rendered(snapshot);
 
         assertThat(headersOf(text)).singleElement().satisfies(header -> {
             assertThat(header).startsWith("\"before\"");
@@ -261,7 +409,11 @@ public class TestThreadSection
         FakeJvm jvm = new FakeJvm();
         jvm.liveThreads.add(thread);
         jvm.threadInfos.add(info);
-        return new ThreadSection(jvm.snapshot(), Findings.NONE, false).lines();
+        return new ThreadSection(jvm.snapshot(), Findings.NONE, false, ThreadGrouping.SAME_STACK).lines();
+    }
+
+    private static List<String> rendered(JvmSnapshot snapshot) {
+        return TestText.render(new ThreadSection(snapshot, Findings.NONE, false, ThreadGrouping.SAME_STACK).lines());
     }
 
     private static List<String> headersOf(List<String> text) {

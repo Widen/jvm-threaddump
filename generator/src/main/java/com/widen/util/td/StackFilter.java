@@ -63,19 +63,20 @@ final class StackFilter
         return startsWithAny(className, HIDDEN_PREFIXES)
                 || (className.indexOf('.') < 0 && className.startsWith("$"))
                 || className.contains("$$")
-                || HIDDEN_METHODS.contains(className + "#" + frame.getMethodName())
+                || HIDDEN_METHODS.contains(callKey(frame))
                 || ACCESSOR.matcher(frame.getMethodName()).matches();
     }
 
     /**
-     * Returns the top frame, which is always kept, followed by every other frame that is not hidden and does not
-     * repeat the class and method of the frame kept before it. Of each run of two or more of those frames from one
-     * collapsed library, only the first and the last are kept, or only the first when both are the same call.
+     * Returns the top frame, which is always kept, followed by every other frame that is not hidden. Of each run of
+     * two or more of those frames from one collapsed library, only the first and the last are kept. Last, a frame
+     * that repeats the class and method of the frame kept before it is dropped, so a run whose outer end repeats the
+     * call above it prints the frame where its caller entered the library.
      */
     static List<StackTraceElement> kept(StackTraceElement[] stack) {
         List<StackTraceElement> calls = new ArrayList<>();
         for (int i = 0; i < stack.length; i++) {
-            if (i == 0 || !hidden(stack[i]) && !sameCall(stack[i], calls.get(calls.size() - 1))) {
+            if (i == 0 || !hidden(stack[i])) {
                 calls.add(stack[i]);
             }
         }
@@ -86,7 +87,6 @@ final class StackFilter
             boolean insideRun = library != null && i > 0 && i < calls.size() - 1
                     && library.equals(collapsedPrefix(calls.get(i - 1)))
                     && library.equals(collapsedPrefix(calls.get(i + 1)));
-            // A run's two ends can be the same call, such as a library calling back into itself.
             if (!insideRun && (i == 0 || !sameCall(calls.get(i), kept.get(kept.size() - 1)))) {
                 kept.add(calls.get(i));
             }
@@ -94,17 +94,17 @@ final class StackFilter
         return kept;
     }
 
-    private static boolean sameCall(StackTraceElement frame, StackTraceElement other) {
-        return frame.getClassName().equals(other.getClassName()) && frame.getMethodName().equals(other.getMethodName());
+    /** The {@code class#method} key that names a call whatever its line. */
+    static String callKey(StackTraceElement frame) {
+        return frame.getClassName() + "#" + frame.getMethodName();
+    }
+
+    static boolean sameCall(StackTraceElement frame, StackTraceElement other) {
+        return callKey(frame).equals(callKey(other));
     }
 
     private static String collapsedPrefix(StackTraceElement frame) {
-        for (String prefix : COLLAPSED_PREFIXES) {
-            if (frame.getClassName().startsWith(prefix)) {
-                return prefix;
-            }
-        }
-        return null;
+        return matchingPrefix(frame.getClassName(), COLLAPSED_PREFIXES);
     }
 
     /**
@@ -120,11 +120,16 @@ final class StackFilter
     }
 
     static boolean startsWithAny(String className, List<String> prefixes) {
+        return matchingPrefix(className, prefixes) != null;
+    }
+
+    /** Returns the first of the prefixes the class name starts with, or null when there is none. */
+    private static String matchingPrefix(String className, List<String> prefixes) {
         for (String prefix : prefixes) {
             if (className.startsWith(prefix)) {
-                return true;
+                return prefix;
             }
         }
-        return false;
+        return null;
     }
 }

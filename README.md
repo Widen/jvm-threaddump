@@ -337,8 +337,8 @@ on any JVM.
 ## The frame filter
 
 Most frames in a stack are plumbing. The thread list hides them, so the
-application's own calls stand out. A frame is hidden when its class, or its
-class and method, matches one of these rules:
+application's own calls stand out. A frame is hidden when its class, its method,
+or both match one of these rules:
 
 | Kind | Frames |
 | --- | --- |
@@ -349,12 +349,7 @@ class and method, matches one of these rules:
 | Lock plumbing | every method of `java.util.concurrent.locks.LockSupport` and of the classes starting with `java.util.concurrent.locks.AbstractQueuedSynchronizer` or `java.util.concurrent.locks.AbstractQueuedLongSynchronizer` |
 | Executor plumbing | `ThreadPoolExecutor.runWorker`, `ThreadPoolExecutor$Worker.run`, `FutureTask.run`, `FutureTask.runAndReset`, `Executors$RunnableAdapter.call`, `ScheduledThreadPoolExecutor$ScheduledFutureTask.run`, `ForkJoinWorkerThread.run`, `ForkJoinPool.runWorker`, `ForkJoinPool.managedBlock`, and `ForkJoinPool.unmanagedBlock`, all in `java.util.concurrent.`, and `java.lang.Thread.run` and `java.lang.Thread.runWith` |
 | Netty thread wrappers | classes starting with `io.netty.util.concurrent.SingleThreadEventExecutor$`, `io.netty.util.internal.ThreadExecutorMap$`, or `io.netty.util.concurrent.FastThreadLocalRunnable` |
-| Accessors | a method named `access$` followed by digits, which javac generates so an inner class can reach a private member |
-
-A frame whose class and method equal those of the frame kept above it is also
-hidden. This drops overload and bridge pairs, such as two
-`SocketInputStream.read` frames in a row, and folds deep recursion into one
-frame.
+| Accessors | a method in any class named `access$` followed by digits, which javac generates so an inner class can reach a private member |
 
 A run of two or more frames from one client or I/O library keeps only its first
 and last frame. The first, the innermost, shows what the library is doing, such
@@ -375,6 +370,12 @@ runs, even when they sit next to each other. The libraries are:
 | JDK NIO | `sun.nio.ch.` |
 | JDK TLS | `sun.security.ssl.` |
 | JDK networking | `java.net.` |
+
+Last, a frame whose class and method equal those of the frame kept above it is
+hidden. This drops overload and bridge pairs, such as two
+`SocketInputStream.read` frames in a row, and folds deep recursion into one
+frame. Of a pair at the outer end of a library run, the lower frame stays, so
+the run still shows where its caller entered the library.
 
 The top frame of a stack always prints, whatever the rules say, because it says
 what the thread is doing now. One line after the last frame gives the number of
@@ -424,7 +425,7 @@ layouts:
   order, so the list keeps name order exactly.
 - `NONE` prints every thread's own stack.
 
-Two stacks are equal when they hold the same frames in the same order, line
+Two stacks are equal when their frames print the same, in the same order, line
 numbers included. The comparison uses every frame, whatever the frame filter
 hides, so threads whose printed stacks differ never share one. A thread with an
 empty stack always prints alone.

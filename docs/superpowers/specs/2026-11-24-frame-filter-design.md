@@ -98,12 +98,7 @@ now.
 
 1. **Hidden frames.** The current rules, plus the executor plumbing and
    accessor rules below.
-2. **Repeats.** A frame whose class and method equal those of the last kept
-   frame is dropped. This removes overload and bridge pairs such as
-   `DelayedWorkQueue.take` twice, `SocketInputStream.read` twice, and
-   `ServletContainer.doFilter` three times, and it folds deep recursion into
-   one frame.
-3. **Library runs.** Two or more consecutive kept frames whose classes start
+2. **Library runs.** Two or more consecutive kept frames whose classes start
    with the same collapsed prefix keep only the first and the last of the run.
    The prefixes are:
 
@@ -122,6 +117,12 @@ now.
 
    Frames from two different prefixes form two runs, even when they sit next to
    each other.
+3. **Repeats.** A frame whose class and method equal those of the last kept
+   frame is dropped. This removes overload and bridge pairs such as
+   `DelayedWorkQueue.take` twice, `SocketInputStream.read` twice, and
+   `ServletContainer.doFilter` three times, and it folds deep recursion into
+   one frame. Because it runs after the library runs, a pair at a run's outer
+   end keeps its lower frame, the one the caller entered the library through.
 
 #### Executor plumbing
 
@@ -159,7 +160,7 @@ code of their own.
 ```text
 "BackgroundService-SqsConsumer-EventConsumer-BirdseyeEnvironmentChangedHandler-0" daemon ... RUNNABLE
     java.net.SocketInputStream.socketRead0(SocketInputStream.java)
-    java.net.SocketInputStream.read(SocketInputStream.java:171)
+    java.net.SocketInputStream.read(SocketInputStream.java:141)
     sun.security.ssl.SSLSocketInputRecord.read(SSLSocketInputRecord.java:476)
     sun.security.ssl.SSLSocketImpl$AppInputStream.read(SSLSocketImpl.java:980)
     org.apache.hc.core5.http.impl.io.SessionInputBufferImpl.fillBuffer(SessionInputBufferImpl.java:149)

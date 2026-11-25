@@ -166,7 +166,7 @@ public class TestStackFilter
 
         assertThat(StackFilter.kept(stack)).extracting(ThreadSection::formatFrame).containsExactly(
                 "    java.net.SocketInputStream.socketRead0(SocketInputStream.java)",
-                "    java.net.SocketInputStream.read(SocketInputStream.java:171)",
+                "    java.net.SocketInputStream.read(SocketInputStream.java:141)",
                 "    sun.security.ssl.SSLSocketInputRecord.read(SSLSocketInputRecord.java:476)",
                 "    sun.security.ssl.SSLSocketImpl$AppInputStream.read(SSLSocketImpl.java:980)",
                 "    org.apache.hc.core5.http.impl.io.SessionInputBufferImpl.fillBuffer(SessionInputBufferImpl.java:149)",
